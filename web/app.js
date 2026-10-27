@@ -3179,7 +3179,7 @@ function adjuntarAsientosCSV(respuesta, csv) {
         ${UI.icono('descargar', { tamano: 14 })} CSV
       </button>
       <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="xlsx">
-        ${UI.icono('descargar', { tamano: 14 })} Excel
+        ${UI.icono('descargar', { tamano: 14 })} Libro Diario en Excel
       </button>
     </div>`;
 
@@ -3217,7 +3217,7 @@ function adjuntarAsientosCSV(respuesta, csv) {
       const respuesta = await fetch('/api/excel/desde-csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv, nombre, hoja: 'Libro Diario' }),
+        body: JSON.stringify({ csv, nombre, formato: 'libro' }),
       });
       if (!respuesta.ok) throw new Error(`Error ${respuesta.status}`);
       descargarBlob(await respuesta.blob(), `${nombre}.xlsx`);

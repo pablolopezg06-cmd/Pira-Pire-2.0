@@ -28,7 +28,7 @@ import csv
 import io
 import re
 import zipfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
@@ -210,13 +210,21 @@ def _letra_columna(indice: int) -> str:
     return letras
 
 
-def escribir(encabezados: list[str], filas: list[list], hoja: str = "Hoja1") -> bytes:
+def escribir(
+    encabezados: list[str],
+    filas: list[list],
+    hoja: str = "Hoja1",
+    *,
+    filas_negrita: set[int] | tuple = (),
+    inmovilizar: int = 1,
+) -> bytes:
     """
     Arma un .xlsx con una sola hoja.
 
     Las celdas ``int``, ``float`` y ``Decimal`` se escriben como números con
     formato de importe; todo lo demás, como texto. La fila de encabezados va
-    en negrita y queda inmovilizada.
+    en negrita, igual que las de ``filas_negrita`` (índices de ``filas``), y
+    las primeras ``inmovilizar`` filas quedan fijas al desplazarse.
     """
     todas = [list(encabezados)] + [list(f) for f in filas]
     anchos = [
@@ -232,14 +240,14 @@ def escribir(encabezados: list[str], filas: list[list], hoja: str = "Hoja1") -> 
             if valor is None or valor == "":
                 continue
             ref = f"{_letra_columna(columna)}{numero}"
-            if numero == 1:
-                celdas.append(f'<c r="{ref}" t="inlineStr" s="1"><is><t>{escape(str(valor))}</t></is></c>')
-            elif isinstance(valor, (int, float, Decimal)) and not isinstance(valor, bool):
-                celdas.append(f'<c r="{ref}" s="2"><v>{valor}</v></c>')
+            negrita = numero == 1 or (numero - 2) in filas_negrita
+            if isinstance(valor, (int, float, Decimal)) and not isinstance(valor, bool):
+                celdas.append(f'<c r="{ref}" s="{3 if negrita else 2}"><v>{valor}</v></c>')
             else:
+                estilo = ' s="1"' if negrita else ""
                 celdas.append(
-                    f'<c r="{ref}" t="inlineStr"><is><t xml:space="preserve">'
-                    f"{escape(str(valor))}</t></is></c>"
+                    f'<c r="{ref}" t="inlineStr"{estilo}>'
+                    f'<is><t xml:space="preserve">{escape(str(valor))}</t></is></c>'
                 )
         filas_xml.append(f'<row r="{numero}">{"".join(celdas)}</row>')
 
@@ -251,7 +259,8 @@ def escribir(encabezados: list[str], filas: list[list], hoja: str = "Hoja1") -> 
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         f'<worksheet xmlns="{_NS["m"]}">'
         '<sheetViews><sheetView workbookViewId="0">'
-        '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+        f'<pane ySplit="{inmovilizar}" topLeftCell="A{inmovilizar + 1}" '
+        'activePane="bottomLeft" state="frozen"/>'
         "</sheetView></sheetViews>"
         f"<cols>{columnas_xml}</cols>"
         f'<sheetData>{"".join(filas_xml)}</sheetData>'
@@ -298,10 +307,11 @@ def escribir(encabezados: list[str], filas: list[list], hoja: str = "Hoja1") -> 
             '<fill><patternFill patternType="gray125"/></fill></fills>'
             '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
             '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-            '<cellXfs count="3">'
+            '<cellXfs count="4">'
             '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
             '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
             '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+            '<xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/>'
             "</cellXfs></styleSheet>"
         ),
         "xl/worksheets/sheet1.xml": hoja_xml,
@@ -345,3 +355,60 @@ def desde_csv(texto: str, hoja: str = "Hoja1") -> bytes:
             nueva.append(valor)
         convertidas.append(nueva)
     return escribir(encabezados, convertidas, hoja)
+
+
+def libro_diario_de_clase(texto_csv: str, nombres: dict[str, str]) -> bytes:
+    """
+    Arma el Libro Diario con el formato de las planillas de clase:
+    NRO · FECHA · CUENTAS CONTABLES · DEBE · HABER, una fila por cuenta, el
+    concepto debajo de cada asiento y «SUMAS IGUALES» al final.
+
+    ``texto_csv`` es el CSV del importador (el que propone Pira Pires) y
+    ``nombres`` traduce cada código de cuenta a su nombre en el plan.
+    """
+    from .dinero import a_centavos, desde_centavos
+
+    lineas = [
+        f for f in csv.reader(io.StringIO((texto_csv or "").lstrip("﻿")), delimiter=";")
+        if any(c.strip() for c in f)
+    ]
+    if len(lineas) < 2:
+        raise ErrorValidacion("No hay asientos para exportar.")
+
+    def importe(valor: str):
+        return desde_centavos(a_centavos(valor)) if valor.strip() else ""
+
+    filas: list[list] = []
+    negritas: set[int] = set()
+    total_debe = total_haber = 0
+    anterior = None
+    concepto = ""
+    for celdas in lineas[1:]:
+        asiento, fecha, concepto_linea, cuenta, detalle, debe, haber = (celdas + [""] * 7)[:7]
+        if asiento != anterior:
+            if anterior is not None:
+                filas += [["", "", concepto, "", ""], ["", "", "", "", ""]]
+            try:
+                fecha = datetime.strptime(fecha.strip(), "%Y-%m-%d").strftime("%d/%m/%Y")
+            except ValueError:
+                pass
+            primera, anterior, concepto = True, asiento, concepto_linea
+        else:
+            primera = False
+        nombre = nombres.get(cuenta.strip()) or detalle or cuenta
+        filas.append([
+            asiento if primera else "", fecha if primera else "",
+            nombre.upper(), importe(debe), importe(haber),
+        ])
+        total_debe += a_centavos(debe or "0")
+        total_haber += a_centavos(haber or "0")
+    filas += [["", "", concepto, "", ""], ["", "", "", "", ""]]
+
+    negritas.add(0)
+    filas.insert(0, ["NRO", "FECHA", "CUENTAS CONTABLES", "DEBE", "HABER"])
+    negritas.add(len(filas))
+    filas.append(["", "", "SUMAS IGUALES", desde_centavos(total_debe), desde_centavos(total_haber)])
+    return escribir(
+        ["LIBRO DIARIO", "", "", "", ""], filas, "LIBRO DIARIO",
+        filas_negrita=negritas, inmovilizar=2,
+    )

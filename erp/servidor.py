@@ -1013,8 +1013,18 @@ class Manejador(BaseHTTPRequestHandler):
         """Convierte a Excel un CSV armado en el navegador (p. ej. el de Pira Pires)."""
         datos = self._leer_cuerpo()
         nombre = re.sub(r"[^\w.-]+", "-", str(datos.get("nombre") or "datos"))[:60]
+        texto = str(datos.get("csv") or "")
+        if datos.get("formato") == "libro":
+            # Formato de planilla de clase, con los nombres del plan de cuentas.
+            nombres = {
+                c["codigo"]: c["nombre"]
+                for c in plan_de_cuentas.listar_cuentas(self.ruta_base)
+            }
+            contenido = excel.libro_diario_de_clase(texto, nombres)
+        else:
+            contenido = excel.desde_csv(texto, str(datos.get("hoja") or "Hoja1"))
         self._enviar_archivo(
-            excel.desde_csv(str(datos.get("csv") or ""), str(datos.get("hoja") or "Hoja1")),
+            contenido,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             f"{nombre.removesuffix('.xlsx')}.xlsx",
         )

@@ -115,6 +115,11 @@ ESTILO
 LIQUIDACIÓN DE SUELDOS — PREGUNTAR ANTES DE CALCULAR
 Cuando la consulta sea sobre sueldos, salarios, jornales, haberes, aguinaldo,
 liquidación de empleados o nómina:
+· EXCEPCIÓN — borradores de operaciones (ejercicios): si el sueldo es una
+  operación más de un borrador y el texto ya dice si hay IPS (por ejemplo
+  «cuentan con IPS»), NO preguntes: aplicá los criterios de la cátedra
+  (9 % obrero, 16,5 % patronal, sin otros descuentos ni aguinaldo) y aclaralo.
+  Solo si el borrador no dice nada del IPS, preguntá eso únicamente.
 · NO calcules el neto, no armes la liquidación ni propongas el asiento de una
   vez. Primero preguntá lo que falta, en un solo mensaje corto y numerado:
   1. ¿Se descuenta el IPS al empleado (aporte obrero, habitualmente 9% sobre
@@ -171,6 +176,62 @@ y te pida registrarlas o armar los asientos:
   pago), preguntalo antes de generar el CSV. Si no se indica la fecha, usá la
   fecha de hoy y aclaralo.
 · No escribas nada dentro del bloque csv que no sea el encabezado y las filas.
+· Antes del bloque csv mostrá los cálculos auxiliares en tablas cortas
+  (desglose del IVA, costo de ventas, interés, liquidación de salarios), como
+  en una planilla de clase.
+
+CRITERIOS DE LA CÁTEDRA PARA RESOLVER BORRADORES
+Seguí estos criterios salvo que el usuario indique otros:
+· Asiento de apertura: los bienes van al Debe (Caja, Banco); las deudas al
+  Haber. Un préstamo con interés genera dos cuentas de pasivo: Préstamo
+  Bancario (capital) e Interés a Pagar, con interés simple
+  = capital × días × tasa / (365 × 100). Capital = Activo − Pasivo, al Haber.
+· IVA incluido (10 %): gravada = total / 1,1 redondeada a 2 decimales;
+  IVA = total − gravada (así el asiento cuadra al centavo). Compras: IVA
+  Crédito Fiscal al Debe. Ventas: IVA Débito Fiscal al Haber.
+· Compra a crédito con pagaré → Documentos a Pagar. Venta a crédito con
+  pagaré → Documentos a Cobrar. Cobro por transferencia o pago con cheque →
+  Banco. Pago en efectivo → Caja.
+· Cada venta de mercaderías lleva un SEGUNDO asiento de costo:
+  Costo de Ventas (Debe) contra Mercaderías (Haber), por
+  unidades vendidas × precio de compra unitario SIN IVA (precio con IVA / 1,1).
+  Calculá el total de cada artículo y redondealo al final, no por unidad.
+· Patentes, tasas municipales e impuestos: gasto sin IVA (Tasas, Patentes e
+  Impuestos).
+· Honorarios y servicios «según factura»: el importe es el TOTAL con IVA
+  10 % incluido. Honorarios Profesionales (gravada) + IVA Crédito Fiscal al
+  Debe, contra el medio de pago.
+· Salarios con IPS: Sueldos y Jornales (bruto) y Aporte Patronal (16,5 %) al
+  Debe; IPS a Pagar (25,5 % = 9 % obrero + 16,5 % patronal) y el neto pagado
+  (91 % del bruto) al Haber. Mostrá la tabla por empleado.
+· Un asiento por operación del borrador (más el de costo en cada venta),
+  numerados en orden, con la fecha del borrador.
+· En un borrador de ejercicio NO frenes para preguntar lo que estos criterios
+  ya resuelven: resolvé TODO el borrador de una vez, generá el CSV y listá al
+  final los supuestos que tomaste. Preguntá solo si falta un importe o una
+  fecha que no se puede deducir.
+
+EJEMPLO RESUELTO (corrección del profesor; los códigos son ilustrativos,
+usá siempre los del plan de cuentas de la empresa)
+Borrador:
+  01/11 Inicia con efectivo 5.000.000, Banco Cta Cte 500.000.000 y préstamo
+  bancario 20.000.000 al 17 % a 280 días.
+  02/11 Compra a crédito con pagaré: 10 computadoras a 10.000.000 y 5 sillas
+  a 900.000 c/u, IVA incluido.
+  03/11 Vende al contado (transferencia): 8 computadoras a 15.000.000 y
+  5 sillas a 1.100.000 c/u, IVA incluido.
+  08/11 Salarios con IPS: 5.000.000, 3.500.000 y 3.900.000.
+Asientos:
+  1 Apertura: Caja 5.000.000,00 D; Banco 500.000.000,00 D; Préstamo Bancario
+    20.000.000,00 H; Interés a Pagar 2.608.219,18 H; Capital 482.391.780,82 H.
+  2 Compra: Mercaderías 95.000.000,00 D; IVA CF 9.500.000,00 D;
+    Documentos a Pagar 104.500.000,00 H.
+  3 Venta: Banco 125.500.000,00 D; Venta de Mercaderías 114.090.909,09 H;
+    IVA DF 11.409.090,91 H.
+  4 Costo: Costo de Ventas 76.818.181,82 D; Mercaderías 76.818.181,82 H
+    (8 × 9.090.909,09 + 5 × 818.181,82).
+  5 Salarios: Sueldos y Jornales 12.400.000,00 D; Aporte Patronal
+    2.046.000,00 D; IPS a Pagar 3.162.000,00 H; Banco 11.284.000,00 H.
 
 LÍMITE
 No asumís el rol de contador que firma declaraciones juradas ni emitís
@@ -240,7 +301,7 @@ PROVEEDOR_GROQ = {
     "clave": "GROQ_API_KEY",
     # Los dos modelos razonan antes de responder, así que el presupuesto
     # tiene que cubrir los tokens de razonamiento además de la respuesta.
-    "tokens": 1500,
+    "tokens": 8000,
     "espera": 20,
 }
 
@@ -258,7 +319,7 @@ PROVEEDOR_GEMINI = {
     # Estos modelos razonan antes de responder: en una prueba gastaron 476
     # tokens de pensamiento antes de la primera palabra. Con un presupuesto
     # chico la respuesta vuelve vacía o cortada.
-    "tokens": 4096,
+    "tokens": 12000,
     "espera": 35,
 }
 

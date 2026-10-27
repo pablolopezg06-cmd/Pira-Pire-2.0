@@ -7,6 +7,7 @@ codigo;nombre;clasificacion;naturaleza;tipo;estado
 1.1.04;Mercaderías;1;D;detalle;ACTIVA
 1.1.05;IVA Crédito Fiscal;1;D;detalle;ACTIVA
 1.1.06;IVA a Recuperar;1;D;detalle;ACTIVA
+1.1.07;Documentos a Cobrar;1;D;detalle;ACTIVA
 1.2;ACTIVO NO CORRIENTE;1;;agrupadora;ACTIVA
 1.2.01;Muebles y Equipos;1;D;detalle;ACTIVA
 1.2.02;Depreciación Acumulada;1;A;detalle;ACTIVA
@@ -15,6 +16,11 @@ codigo;nombre;clasificacion;naturaleza;tipo;estado
 2.1.01;Proveedores;2;A;detalle;ACTIVA
 2.1.02;IVA Débito Fiscal;2;A;detalle;ACTIVA
 2.1.03;IVA por Pagar;2;A;detalle;ACTIVA
+2.1.04;Documentos a Pagar;2;A;detalle;ACTIVA
+2.1.05;Préstamo Bancario;2;A;detalle;ACTIVA
+2.1.06;Interés a Pagar;2;A;detalle;ACTIVA
+2.1.07;IPS a Pagar;2;A;detalle;ACTIVA
+2.1.08;Sueldos a Pagar;2;A;detalle;ACTIVA
 3;PATRIMONIO NETO;3;;agrupadora;ACTIVA
 3.1;Capital;3;A;detalle;ACTIVA
 4;INGRESOS;4;;agrupadora;ACTIVA
@@ -26,3 +32,8 @@ codigo;nombre;clasificacion;naturaleza;tipo;estado
 6;GASTOS;6;;agrupadora;ACTIVA
 6.1;Gastos Administrativos;6;D;detalle;ACTIVA
 6.2;Gastos de Ventas;6;D;detalle;ACTIVA
+6.3;Tasas, Patentes e Impuestos;6;D;detalle;ACTIVA
+6.4;Honorarios Profesionales;6;D;detalle;ACTIVA
+6.5;Sueldos y Jornales;6;D;detalle;ACTIVA
+6.6;Aporte Patronal;6;D;detalle;ACTIVA
+6.7;Intereses Pagados;6;D;detalle;ACTIVA
