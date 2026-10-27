@@ -97,7 +97,7 @@ def _csv(encabezados: list[str], filas: list[list]) -> bytes:
     escritor.writerow(encabezados)
     escritor.writerows(filas)
     # Con BOM, Excel abre el CSV en UTF-8 y respeta los acentos.
-    return ("﻿" + salida.getvalue()).encode("utf-8")
+    return ("\ufeff" + salida.getvalue()).encode("utf-8")
 
 
 def exportar(

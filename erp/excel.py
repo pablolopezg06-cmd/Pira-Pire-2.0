@@ -331,7 +331,7 @@ def desde_csv(texto: str, hoja: str = "Hoja1") -> bytes:
     """
     from .dinero import a_centavos, desde_centavos
 
-    texto = (texto or "").lstrip("﻿").strip()
+    texto = (texto or "").lstrip("\ufeff").strip()
     if not texto:
         raise ErrorValidacion("No hay datos para exportar.")
     try:
@@ -361,7 +361,9 @@ def libro_diario_de_clase(texto_csv: str, nombres: dict[str, str]) -> bytes:
     """
     Arma el Libro Diario con el formato de las planillas de clase:
     NRO · FECHA · CUENTAS CONTABLES · DEBE · HABER, una fila por cuenta, el
-    concepto debajo de cada asiento y «SUMAS IGUALES» al final.
+    concepto debajo de cada asiento y «SUMAS IGUALES» al final. A la derecha
+    va el CÓDIGO de cada cuenta, para que el archivo se pueda volver a
+    importar sin depender de cómo se llama la cuenta.
 
     ``texto_csv`` es el CSV del importador (el que propone Pira Pires) y
     ``nombres`` traduce cada código de cuenta a su nombre en el plan.
@@ -369,7 +371,7 @@ def libro_diario_de_clase(texto_csv: str, nombres: dict[str, str]) -> bytes:
     from .dinero import a_centavos, desde_centavos
 
     lineas = [
-        f for f in csv.reader(io.StringIO((texto_csv or "").lstrip("﻿")), delimiter=";")
+        f for f in csv.reader(io.StringIO((texto_csv or "").lstrip("\ufeff")), delimiter=";")
         if any(c.strip() for c in f)
     ]
     if len(lineas) < 2:
@@ -387,7 +389,7 @@ def libro_diario_de_clase(texto_csv: str, nombres: dict[str, str]) -> bytes:
         asiento, fecha, concepto_linea, cuenta, detalle, debe, haber = (celdas + [""] * 7)[:7]
         if asiento != anterior:
             if anterior is not None:
-                filas += [["", "", concepto, "", ""], ["", "", "", "", ""]]
+                filas += [["", "", concepto, "", "", ""], ["", "", "", "", "", ""]]
             try:
                 fecha = datetime.strptime(fecha.strip(), "%Y-%m-%d").strftime("%d/%m/%Y")
             except ValueError:
@@ -398,17 +400,17 @@ def libro_diario_de_clase(texto_csv: str, nombres: dict[str, str]) -> bytes:
         nombre = nombres.get(cuenta.strip()) or detalle or cuenta
         filas.append([
             asiento if primera else "", fecha if primera else "",
-            nombre.upper(), importe(debe), importe(haber),
+            nombre.upper(), importe(debe), importe(haber), cuenta.strip(),
         ])
         total_debe += a_centavos(debe or "0")
         total_haber += a_centavos(haber or "0")
-    filas += [["", "", concepto, "", ""], ["", "", "", "", ""]]
+    filas += [["", "", concepto, "", "", ""], ["", "", "", "", "", ""]]
 
     negritas.add(0)
-    filas.insert(0, ["NRO", "FECHA", "CUENTAS CONTABLES", "DEBE", "HABER"])
+    filas.insert(0, ["NRO", "FECHA", "CUENTAS CONTABLES", "DEBE", "HABER", "CÓDIGO"])
     negritas.add(len(filas))
-    filas.append(["", "", "SUMAS IGUALES", desde_centavos(total_debe), desde_centavos(total_haber)])
+    filas.append(["", "", "SUMAS IGUALES", desde_centavos(total_debe), desde_centavos(total_haber), ""])
     return escribir(
-        ["LIBRO DIARIO", "", "", "", ""], filas, "LIBRO DIARIO",
+        ["LIBRO DIARIO", "", "", "", "", ""], filas, "LIBRO DIARIO",
         filas_negrita=negritas, inmovilizar=2,
     )

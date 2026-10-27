@@ -1075,10 +1075,18 @@ class Manejador(BaseHTTPRequestHandler):
         texto = str(datos.get("csv") or "")
         if datos.get("formato") == "libro":
             # Formato de planilla de clase, con los nombres del plan de cuentas.
+            # Si una cuenta todavía no existe en la empresa (el plan propuesto
+            # aún no se importó), se usa el nombre de la plantilla de la cátedra.
             nombres = {
+                linea.split(";")[0]: linea.split(";")[1]
+                for linea in (RAIZ_WEB / "plantillas" / "cuentas.csv")
+                .read_text(encoding="utf-8").splitlines()[1:]
+                if linea.count(";") >= 1
+            }
+            nombres.update({
                 c["codigo"]: c["nombre"]
                 for c in plan_de_cuentas.listar_cuentas(self.ruta_base)
-            }
+            })
             contenido = excel.libro_diario_de_clase(texto, nombres)
         else:
             contenido = excel.desde_csv(texto, str(datos.get("hoja") or "Hoja1"))

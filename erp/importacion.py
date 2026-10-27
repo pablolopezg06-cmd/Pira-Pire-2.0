@@ -622,13 +622,34 @@ def _agrupar_asientos(
     return grupos
 
 
+#: Plantilla del plan de cuentas de la cátedra (para reconocer sus nombres).
+_PLANTILLA_CUENTAS = (
+    __import__("pathlib").Path(__file__).resolve().parent.parent
+    / "web" / "plantillas" / "cuentas.csv"
+)
+
+
 def _codigos_por_nombre(ruta: str | None) -> dict[str, str]:
-    """``{nombre normalizado: código}`` de las cuentas de detalle del plan."""
+    """
+    ``{nombre normalizado: código}`` de las cuentas de detalle del plan. Se
+    suman los nombres de la plantilla de la cátedra para los códigos que la
+    empresa tiene con otro nombre (por ejemplo, si renombró la cuenta).
+    """
     with conectar(ruta) as conexion:
         filas = conexion.execute(
             "SELECT codigo, nombre FROM cuenta WHERE recibe_movimiento = 1"
         ).fetchall()
-    return {_norm(f["nombre"]): f["codigo"] for f in filas}
+    codigos = {f["codigo"] for f in filas}
+    resultado: dict[str, str] = {}
+    try:
+        for linea in _PLANTILLA_CUENTAS.read_text(encoding="utf-8").splitlines()[1:]:
+            partes = linea.split(";")
+            if len(partes) > 1 and partes[0] in codigos:
+                resultado[_norm(partes[1])] = partes[0]
+    except OSError:
+        pass
+    resultado.update({_norm(f["nombre"]): f["codigo"] for f in filas})
+    return resultado
 
 
 def _codigo_de_nombre(nombre: str, codigos: dict[str, str]) -> str:
@@ -654,7 +675,7 @@ def _desde_formato_clase(texto: str, ruta: str | None) -> str:
     sin importes debajo de cada asiento y «SUMAS IGUALES» al final) al CSV del
     importador. Si el texto no tiene ese formato, lo devuelve sin cambios.
     """
-    texto = (texto or "").lstrip("﻿")
+    texto = (texto or "").lstrip("\ufeff")
     try:
         delimitador = csv.Sniffer().sniff(texto[:2000], delimiters=";,\t|").delimiter
     except csv.Error:
@@ -673,6 +694,7 @@ def _desde_formato_clase(texto: str, ruta: str | None) -> str:
     inicio, columnas = cabecera
     c_nro, c_fecha = columnas.get("nro"), columnas.get("fecha")
     c_cuenta, c_debe, c_haber = columnas["cuentascontables"], columnas["debe"], columnas.get("haber")
+    c_codigo = columnas.get("codigo")
     codigos = _codigos_por_nombre(ruta)
 
     def celda(celdas: list[str], i: int | None) -> str:
@@ -694,7 +716,9 @@ def _desde_formato_clase(texto: str, ruta: str | None) -> str:
             # Fila sin importes debajo del asiento: es el concepto.
             actual["concepto"] = actual["concepto"] or cuenta
             continue
-        actual["lineas"].append((_codigo_de_nombre(cuenta, codigos), cuenta, debe, haber))
+        # El código, si la planilla lo trae, es exacto; si no, se busca por nombre.
+        codigo = celda(celdas, c_codigo) or _codigo_de_nombre(cuenta, codigos)
+        actual["lineas"].append((codigo, cuenta, debe, haber))
 
     salida = io.StringIO()
     escritor = csv.writer(salida, delimiter=";", lineterminator="\n")
