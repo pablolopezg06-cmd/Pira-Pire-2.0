@@ -177,6 +177,8 @@ y te pida registrarlas o armar los asientos:
   pago), preguntalo antes de generar el CSV. Si no se indica la fecha, usá la
   fecha de hoy y aclaralo.
 · No escribas nada dentro del bloque csv que no sea el encabezado y las filas.
+· Antes de responder, sumá el Debe y el Haber de CADA asiento y verificá que
+  sean iguales; en la apertura no te olvides del Interés a Pagar.
 · Antes del bloque csv mostrá los cálculos auxiliares en tablas cortas
   (desglose del IVA, costo de ventas, interés, liquidación de salarios), como
   en una planilla de clase.
@@ -280,7 +282,8 @@ def revisar_asientos(borrador: str, csv_asientos: str | None) -> list[str]:
 
     * cada fecha que aparece en el borrador tenga al menos un asiento, y
     * cada fecha con una venta (cuenta 4 al Haber) tenga también su asiento
-      de costo (cuenta 5 al Debe), como pide la cátedra.
+      de costo (cuenta 5 al Debe), como pide la cátedra, y
+    * cada asiento cuadre (total Debe = total Haber).
 
     Devuelve la lista de avisos; vacía si no se detectó nada.
     """
@@ -296,13 +299,22 @@ def revisar_asientos(borrador: str, csv_asientos: str | None) -> list[str]:
         if iso not in fechas_borrador:
             fechas_borrador.append(iso)
 
+    from .dinero import ErrorMonto, a_centavos, formato_monto
+
     fechas_csv: set[str] = set()
     ventas: set[str] = set()
     costos: set[str] = set()
+    sumas: dict[str, list[int]] = {}
     for linea in csv_asientos.splitlines()[1:]:
         celdas = (linea.split(";") + [""] * 7)[:7]
         fecha, cuenta, debe, haber = celdas[1].strip(), celdas[3].strip(), celdas[5], celdas[6]
         fechas_csv.add(fecha)
+        try:
+            suma = sumas.setdefault(celdas[0].strip(), [0, 0])
+            suma[0] += a_centavos(debe)
+            suma[1] += a_centavos(haber)
+        except ErrorMonto:
+            pass
         if cuenta.startswith("4") and haber.strip():
             ventas.add(fecha)
         if cuenta.startswith("5") and debe.strip():
@@ -320,6 +332,13 @@ def revisar_asientos(borrador: str, csv_asientos: str | None) -> list[str]:
         avisos.append(
             f"La venta del {corta(iso)} no tiene su asiento de costo de ventas."
         )
+    for numero, (debe, haber) in sumas.items():
+        if debe != haber:
+            avisos.append(
+                f"El asiento {numero} no cuadra: Debe {formato_monto(debe, False)} "
+                f"y Haber {formato_monto(haber, False)} (diferencia "
+                f"{formato_monto(abs(debe - haber), False)}); falta o sobra una línea."
+            )
     return avisos
 
 
