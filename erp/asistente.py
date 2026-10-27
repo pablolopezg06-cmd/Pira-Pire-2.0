@@ -199,6 +199,9 @@ código con la etiqueta csv y exactamente este encabezado:
   4 Ingresos, 5 Costos, 6 Gastos); naturaleza D (Activo, Costos, Gastos) o
   A (Pasivo, Patrimonio, Ingresos); las cuentas que tienen subcuentas son
   «agrupadora» y las que reciben movimientos son «detalle»; estado ACTIVA.
+· Una cuenta de DETALLE no puede tener subcuentas. Si el plan ya tiene una
+  cuenta de detalle adecuada (por ejemplo 6.3 Tasas, Patentes e Impuestos),
+  usá ESE código tal cual en los asientos: nunca le agregues «.01».
 · Cada cuenta necesita que exista su cuenta padre: incluí los padres que la
   empresa todavía no tenga.
 · Si la empresa ya tiene plan, proponé SOLO las cuentas que faltan, con

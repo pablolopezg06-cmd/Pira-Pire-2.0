@@ -874,6 +874,28 @@ class Manejador(BaseHTTPRequestHandler):
                 linea.split(";")[0].strip()
                 for linea in (resultado.get("cuentas_csv") or "").splitlines()[1:]
             }
+
+            # «6.3.01» cuando 6.3 ya es de detalle: se usa 6.3, y esas
+            # subcuentas imposibles se sacan del plan propuesto.
+            def ajustar(linea: str) -> str:
+                celdas = linea.split(";")
+                if len(celdas) > 3:
+                    celdas[3] = importacion.ajustar_codigo(celdas[3], validas)
+                return ";".join(celdas)
+
+            lineas = resultado["asientos_csv"].splitlines()
+            resultado["asientos_csv"] = "\n".join(
+                [lineas[0], *(ajustar(l) for l in lineas[1:])]
+            ) + "\n"
+            if resultado.get("cuentas_csv"):
+                plan = resultado["cuentas_csv"].splitlines()
+                plan = [plan[0], *(
+                    l for l in plan[1:]
+                    if importacion.ajustar_codigo(l.split(";")[0], validas)
+                    == l.split(";")[0].strip()
+                )]
+                resultado["cuentas_csv"] = "\n".join(plan) + "\n" if len(plan) > 1 else None
+                propuestas = {l.split(";")[0].strip() for l in plan[1:]}
             usadas = {
                 (linea.split(";") + [""] * 4)[3].strip()
                 for linea in resultado["asientos_csv"].splitlines()[1:]

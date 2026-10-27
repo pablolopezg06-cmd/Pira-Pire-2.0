@@ -652,6 +652,36 @@ def _codigos_por_nombre(ruta: str | None) -> dict[str, str]:
     return resultado
 
 
+def ajustar_codigo(codigo: str, detalle: set[str]) -> str:
+    """
+    Corrige un código que cuelga de una cuenta de detalle existente.
+
+    Una cuenta de detalle no puede tener subcuentas, así que «6.3.01» cuando
+    «6.3» es de detalle solo puede referirse a «6.3» (el modelo a veces
+    agrega «.01» por su cuenta). Si no hay tal cuenta, devuelve el código
+    sin cambios y la validación informa el error.
+    """
+    codigo = str(codigo or "").strip()
+    if codigo in detalle:
+        return codigo
+    partes = codigo.split(".")
+    for largo in range(len(partes) - 1, 0, -1):
+        padre = ".".join(partes[:largo])
+        if padre in detalle:
+            return padre
+    return codigo
+
+
+def codigos_de_detalle(ruta: str | None) -> set[str]:
+    """Códigos de las cuentas de detalle activas del plan."""
+    with conectar(ruta) as conexion:
+        return {
+            f["codigo"] for f in conexion.execute(
+                "SELECT codigo FROM cuenta WHERE recibe_movimiento = 1 AND estado = 'ACTIVA'"
+            ).fetchall()
+        }
+
+
 def _codigo_de_nombre(nombre: str, codigos: dict[str, str]) -> str:
     """
     Busca la cuenta por nombre: primero exacto (sin acentos ni signos) y si
@@ -696,6 +726,7 @@ def _desde_formato_clase(texto: str, ruta: str | None) -> str:
     c_cuenta, c_debe, c_haber = columnas["cuentascontables"], columnas["debe"], columnas.get("haber")
     c_codigo = columnas.get("codigo")
     codigos = _codigos_por_nombre(ruta)
+    detalle = codigos_de_detalle(ruta)
 
     def celda(celdas: list[str], i: int | None) -> str:
         return celdas[i].strip() if i is not None and i < len(celdas) else ""
@@ -717,7 +748,12 @@ def _desde_formato_clase(texto: str, ruta: str | None) -> str:
             actual["concepto"] = actual["concepto"] or cuenta
             continue
         # El código, si la planilla lo trae, es exacto; si no, se busca por nombre.
-        codigo = celda(celdas, c_codigo) or _codigo_de_nombre(cuenta, codigos)
+        codigo = celda(celdas, c_codigo)
+        if codigo not in detalle:
+            # Código ausente o que no existe: se prueba por nombre y, si no,
+            # se corrige «6.3.01» -> «6.3» cuando 6.3 es de detalle.
+            por_nombre = _codigo_de_nombre(cuenta, codigos)
+            codigo = por_nombre if por_nombre in detalle else ajustar_codigo(codigo or por_nombre, detalle)
         actual["lineas"].append((codigo, cuenta, debe, haber))
 
     salida = io.StringIO()
