@@ -127,6 +127,12 @@ def _crear_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    # La consola de Windows usa cp1252 y no puede imprimir «→» ni otros
+    # caracteres de los mensajes: sin esto el programa se cae al arrancar.
+    for flujo in (sys.stdout, sys.stderr):
+        if hasattr(flujo, "reconfigure"):
+            flujo.reconfigure(encoding="utf-8", errors="replace")
+
     cargar_claves()
     argumentos = _crear_parser().parse_args()
 
