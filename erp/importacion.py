@@ -742,6 +742,17 @@ def importar_asientos(
                 {clave: valor for clave, valor in p.items() if clave != "_linea"}
                 for p in partidas
             ]
+            # Para la vista previa: el nombre de cada cuenta, si existe.
+            grupo["vista"] = [
+                {
+                    "cuenta": p["cuenta"],
+                    "nombre": (_cuenta_minima(conexion, p["cuenta"]) or {}).get("nombre"),
+                    "detalle": p["detalle"],
+                    "debe": p["debe"],
+                    "haber": p["haber"],
+                }
+                for p in partidas
+            ]
             grupo["total_debe"] = total_debe
             grupo["total_haber"] = total_haber
 
@@ -769,6 +780,7 @@ def importar_asientos(
             "lineas": len(grupo["lineas"]),
             "debe": grupo.get("total_debe", 0),
             "haber": grupo.get("total_haber", 0),
+            "partidas": grupo.get("vista", []),
         }
         for grupo in grupos[:12]
     ]

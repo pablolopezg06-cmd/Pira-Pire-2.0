@@ -635,23 +635,30 @@ function contenidoPrevioCuentas(previa) {
 }
 
 function tablaMuestraAsientos(muestra) {
-  const filas = (muestra || []).map((asiento) => `
-    <tr>
-      <td class="whitespace-nowrap font-mono text-xs">${esc(asiento.asiento)}</td>
-      <td class="whitespace-nowrap">${esc(fmtFecha(asiento.fecha))}</td>
-      <td>${esc(asiento.concepto)}</td>
-      <td class="text-center">${esc(asiento.lineas)}</td>
-      <td class="whitespace-nowrap text-right tabular-nums">${esc(fmt(asiento.debe))}</td>
-      <td class="whitespace-nowrap text-right tabular-nums">${esc(fmt(asiento.haber))}</td>
-    </tr>`).join('');
+  const filas = (muestra || []).map((asiento) => {
+    const lineas = (asiento.partidas || []).map((p) => `
+      <tr>
+        <td class="whitespace-nowrap pl-6 font-mono text-xs">${esc(p.cuenta)}</td>
+        <td>${esc(p.nombre || '¿cuenta inexistente?')}${p.detalle
+          ? `<span class="text-surface-500"> · ${esc(p.detalle)}</span>` : ''}</td>
+        <td class="whitespace-nowrap text-right tabular-nums">${p.debe ? esc(fmt(p.debe, false)) : ''}</td>
+        <td class="whitespace-nowrap text-right tabular-nums">${p.haber ? esc(fmt(p.haber, false)) : ''}</td>
+      </tr>`).join('');
+    return `
+      <tr class="bg-surface-100/60 font-semibold">
+        <td class="whitespace-nowrap font-mono text-xs">${esc(asiento.asiento)}</td>
+        <td>${esc(fmtFecha(asiento.fecha))} · ${esc(asiento.concepto)}</td>
+        <td class="whitespace-nowrap text-right tabular-nums">${esc(fmt(asiento.debe, false))}</td>
+        <td class="whitespace-nowrap text-right tabular-nums">${esc(fmt(asiento.haber, false))}</td>
+      </tr>${lineas}`;
+  }).join('');
 
   return `
-    <div class="max-h-52 overflow-auto rounded-field border border-surface-200">
+    <div class="max-h-72 overflow-auto rounded-field border border-surface-200">
       <table class="table text-xs">
         <thead>
           <tr>
-            <th>Asiento</th><th>Fecha</th><th>Concepto</th>
-            <th class="text-center">Líneas</th>
+            <th>N.º</th><th>Fecha · concepto / cuenta</th>
             <th class="text-right">Debe</th><th class="text-right">Haber</th>
           </tr>
         </thead>
@@ -771,7 +778,15 @@ async function importarCuentasCSV(archivo) {
 async function importarAsientosCSV(archivo) {
   const texto = await leerArchivoCSV(archivo);
   if (texto === null) return;
+  await importarAsientosTexto(texto);
+}
 
+/**
+ * Vista previa y confirmación de asientos en formato CSV. La usan el
+ * importador de archivos y la tarjeta de asientos propuestos por Pira Pires.
+ * Devuelve el resultado de la importación, o `null` si no se guardó nada.
+ */
+async function importarAsientosTexto(texto, opciones = {}) {
   let previa;
   try {
     previa = await api('/api/importar/asientos', {
@@ -780,19 +795,20 @@ async function importarAsientosCSV(archivo) {
     });
   } catch (error) {
     avisarError(error);
-    return;
+    return null;
   }
 
   if (!previa.valido) {
     await UI.abrirDialogo({
-      titulo: 'El CSV de asientos tiene errores',
-      contenido: contenidoErroresImportacion(previa),
+      titulo: opciones.tituloErrores || 'El CSV de asientos tiene errores',
+      contenido: contenidoErroresImportacion(previa)
+        + (opciones.ayudaErrores ? `<p class="mt-3 text-xs">${opciones.ayudaErrores}</p>` : ''),
       confirmarTexto: 'Entendido',
       cancelarTexto: null,
       variant: 'danger',
       icono: 'alerta',
     });
-    return;
+    return null;
   }
 
   if (!previa.asientos) {
@@ -803,18 +819,18 @@ async function importarAsientosCSV(archivo) {
       cancelarTexto: null,
       icono: 'info',
     });
-    return;
+    return null;
   }
 
   const aceptado = await UI.abrirDialogo({
-    titulo: 'Importar asientos',
+    titulo: opciones.titulo || 'Importar asientos',
     contenido: contenidoPrevioAsientos(previa),
     confirmarTexto: `Importar ${previa.asientos} asiento(s)`,
     cancelarTexto: 'Cancelar',
     variant: 'primary',
     icono: 'archivo',
   });
-  if (!aceptado) return;
+  if (!aceptado) return null;
 
   try {
     const resultado = await api('/api/importar/asientos', {
@@ -827,8 +843,10 @@ async function importarAsientosCSV(archivo) {
       'Libro Diario actualizado',
     );
     await Promise.all([cargarDiario(), cargarPanel()]);
+    return resultado;
   } catch (error) {
     avisarError(error);
+    return null;
   }
 }
 
@@ -3118,6 +3136,9 @@ function adjuntarAsientosCSV(respuesta, csv) {
     </p>
     ${tablaAsientosPropuestos(csv)}
     <div class="flex flex-wrap gap-2">
+      <button type="button" class="btn btn-sm btn-primary-fill" data-accion="importar">
+        ${UI.icono('tilde', { tamano: 14 })} Revisar e importar al Libro Diario
+      </button>
       <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="copiar">
         Copiar CSV
       </button>
@@ -3125,6 +3146,24 @@ function adjuntarAsientosCSV(respuesta, csv) {
         ${UI.icono('descargar', { tamano: 14 })} Descargar CSV
       </button>
     </div>`;
+
+  const botonImportar = tarjeta.querySelector('[data-accion="importar"]');
+  botonImportar.onclick = async () => {
+    botonImportar.disabled = true;
+    const resultado = await importarAsientosTexto(csv, {
+      titulo: 'Revisar asientos de Pira Pires',
+      tituloErrores: 'Los asientos propuestos tienen errores',
+      ayudaErrores: 'Podés pedirle a Pira Pires que los corrija: copiá el error '
+        + 'en el chat y volvé a intentarlo con la nueva propuesta.',
+    });
+    if (resultado) {
+      // Ya están en el Libro Diario: no se ofrece importarlos dos veces.
+      botonImportar.innerHTML = `${UI.icono('cheque', { tamano: 14 })} `
+        + `Importados (${resultado.creados})`;
+    } else {
+      botonImportar.disabled = false;
+    }
+  };
 
   tarjeta.querySelector('[data-accion="copiar"]').onclick = async () => {
     try {
