@@ -169,10 +169,11 @@ y te pida registrarlas o armar los asientos:
   AAAA-MM-DD; importes en formato paraguayo (punto de miles, coma decimal) y
   la otra columna vacía; nunca importes negativos; cada asiento con al menos
   dos líneas y total Debe = total Haber.
-· Usá SOLO códigos de cuentas de detalle activas del plan de cuentas de la
-  empresa, que se te informa más abajo. Si una operación necesita una cuenta
-  que no existe, no la inventes: decí cuál habría que crear y dejá ese asiento
-  fuera del CSV.
+· Usá códigos de cuentas de detalle activas del plan de cuentas de la
+  empresa, que se te informa más abajo. Si el plan está vacío o le faltan
+  cuentas que el borrador necesita, NO dejes asientos afuera: proponé primero
+  esas cuentas en un bloque csv de PLAN DE CUENTAS (ver abajo) y usá esos
+  códigos en los asientos. Aclarale al usuario que importe primero el plan.
 · Si falta un dato imprescindible (importe, fecha, si incluye IVA, forma de
   pago), preguntalo antes de generar el CSV. Si no se indica la fecha, usá la
   fecha de hoy y aclaralo.
@@ -182,6 +183,30 @@ y te pida registrarlas o armar los asientos:
 · Antes del bloque csv mostrá los cálculos auxiliares en tablas cortas
   (desglose del IVA, costo de ventas, interés, liquidación de salarios), como
   en una planilla de clase.
+
+CREAR O COMPLETAR EL PLAN DE CUENTAS
+Sí podés crear el plan de cuentas. Cuando el usuario te lo pida, o cuando
+un borrador necesite cuentas que la empresa no tiene, escribí un bloque de
+código con la etiqueta csv y exactamente este encabezado:
+  ```csv
+  codigo;nombre;clasificacion;naturaleza;tipo;estado
+  1;ACTIVO;1;D;agrupadora;ACTIVA
+  1.1;ACTIVO CORRIENTE;1;D;agrupadora;ACTIVA
+  1.1.01;Caja;1;D;detalle;ACTIVA
+  ```
+· Reglas: código jerárquico de hasta 3 niveles (1, 1.1, 1.1.01); el primer
+  dígito es la clasificación (1 Activo, 2 Pasivo, 3 Patrimonio Neto,
+  4 Ingresos, 5 Costos, 6 Gastos); naturaleza D (Activo, Costos, Gastos) o
+  A (Pasivo, Patrimonio, Ingresos); las cuentas que tienen subcuentas son
+  «agrupadora» y las que reciben movimientos son «detalle»; estado ACTIVA.
+· Cada cuenta necesita que exista su cuenta padre: incluí los padres que la
+  empresa todavía no tenga.
+· Si la empresa ya tiene plan, proponé SOLO las cuentas que faltan, con
+  códigos libres que sigan la numeración existente; no repitas las que ya
+  están.
+· Si te piden un plan completo y no hay otro dato, partí del plan sugerido de
+  la cátedra (más abajo, si el plan de la empresa está vacío) y adaptalo a la
+  actividad de la empresa.
 
 CRITERIOS DE LA CÁTEDRA PARA RESOLVER BORRADORES
 Seguí estos criterios salvo que el usuario indique otros:
@@ -245,24 +270,31 @@ conceptos vinculantes: sos una guía de estudio.
 ENCABEZADO_CSV_ASIENTOS = "asiento;fecha;concepto;cuenta;detalle;debe;haber"
 
 
-def contexto_empresa(cuentas: list[dict], hoy: str) -> str:
+def contexto_empresa(cuentas: list[dict], hoy: str, plantilla: str = "") -> str:
     """
     Arma el bloque de contexto que se agrega al prompt de sistema: la fecha
-    de hoy y las cuentas de detalle activas, que son las únicas en las que el
-    modelo puede proponer movimientos.
+    de hoy y el plan de cuentas de la empresa (agrupadoras y de detalle
+    activas), para que los asientos usen códigos reales y las cuentas nuevas
+    sigan la numeración. Si el plan está vacío se agrega ``plantilla`` (el
+    CSV del plan sugerido de la cátedra) como punto de partida.
     """
     lineas = [
         f"- {c['codigo']} · {c['nombre']}"
+        + ("" if c.get("recibe_movimiento") else " (agrupadora)")
         for c in cuentas
-        if c.get("recibe_movimiento") and c.get("estado") == "ACTIVA"
+        if c.get("estado") == "ACTIVA"
     ]
-    plan = "\n".join(lineas) if lineas else (
-        "(El plan de cuentas está vacío: si te piden asientos, pedí que "
-        "primero carguen el plan de cuentas.)"
-    )
+    if lineas:
+        plan = "\n".join(lineas)
+    else:
+        plan = (
+            "(El plan de cuentas está VACÍO. Si te piden asientos o un plan, "
+            "proponé el plan de cuentas en csv, partiendo de este plan sugerido "
+            "de la cátedra:)\n" + plantilla.strip()
+        )
     return (
         f"\nCONTEXTO DE LA EMPRESA\nFecha de hoy: {hoy}\n"
-        f"Cuentas de detalle activas (código · nombre):\n{plan}\n"
+        f"Plan de cuentas activo (código · nombre):\n{plan}\n"
     )
 
 
@@ -340,6 +372,22 @@ def revisar_asientos(borrador: str, csv_asientos: str | None) -> list[str]:
                 f"{formato_monto(abs(debe - haber), False)}); falta o sobra una línea."
             )
     return avisos
+
+
+#: Encabezado del CSV del plan de cuentas que entiende `erp.importacion`.
+ENCABEZADO_CSV_CUENTAS = "codigo;nombre;clasificacion;naturaleza;tipo;estado"
+
+
+def extraer_csv_cuentas(texto: str) -> str | None:
+    """Devuelve el CSV del plan de cuentas que propuso el modelo, o ``None``."""
+    filas: list[str] = []
+    for coincidencia in _PATRON_BLOQUE_CSV.finditer(texto or ""):
+        contenido = [l.strip() for l in coincidencia.group(2).strip().splitlines() if l.strip()]
+        if contenido and contenido[0].lower().replace(" ", "").startswith("codigo;nombre"):
+            filas.extend(contenido[1:])
+    if not filas:
+        return None
+    return ENCABEZADO_CSV_CUENTAS + "\n" + "\n".join(filas) + "\n"
 
 
 def extraer_csv_asientos(texto: str) -> str | None:
@@ -804,6 +852,7 @@ def preguntar(
         return {
             "respuesta": r["texto"],
             "asientos_csv": csv_asientos,
+            "cuentas_csv": extraer_csv_cuentas(r["texto"]),
             "avisos": avisos,
             "proveedor": proveedor["nombre"],
             "modelo": r["modelo"],

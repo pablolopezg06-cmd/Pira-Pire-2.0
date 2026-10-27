@@ -740,7 +740,16 @@ function archivoABase64(archivo) {
 async function importarCuentasCSV(archivo) {
   const contenido = await leerArchivoCSV(archivo);
   if (contenido === null) return;
+  await importarCuentasTexto(contenido);
+}
 
+/**
+ * Vista previa y confirmación de un plan de cuentas. `contenido` es
+ * `{ csv }` o `{ xlsx }`. La usan el importador de archivos y la tarjeta del
+ * plan que propone Pira Pires. Devuelve el resultado, o `null` si no se
+ * guardó nada.
+ */
+async function importarCuentasTexto(contenido, opciones = {}) {
   let previa;
   try {
     previa = await api('/api/importar/cuentas', {
@@ -749,19 +758,19 @@ async function importarCuentasCSV(archivo) {
     });
   } catch (error) {
     avisarError(error);
-    return;
+    return null;
   }
 
   if (!previa.valido) {
     await UI.abrirDialogo({
-      titulo: 'El CSV de cuentas tiene errores',
+      titulo: opciones.tituloErrores || 'El CSV de cuentas tiene errores',
       contenido: contenidoErroresImportacion(previa),
       confirmarTexto: 'Entendido',
       cancelarTexto: null,
       variant: 'danger',
       icono: 'alerta',
     });
-    return;
+    return null;
   }
 
   if (!previa.a_crear) {
@@ -773,18 +782,18 @@ async function importarCuentasCSV(archivo) {
       cancelarTexto: null,
       icono: 'info',
     });
-    return;
+    return null;
   }
 
   const aceptado = await UI.abrirDialogo({
-    titulo: 'Importar plan de cuentas',
+    titulo: opciones.titulo || 'Importar plan de cuentas',
     contenido: contenidoPrevioCuentas(previa),
     confirmarTexto: `Importar ${previa.a_crear} cuenta(s)`,
     cancelarTexto: 'Cancelar',
     variant: 'primary',
     icono: 'archivo',
   });
-  if (!aceptado) return;
+  if (!aceptado) return null;
 
   try {
     const resultado = await api('/api/importar/cuentas', {
@@ -798,8 +807,10 @@ async function importarCuentasCSV(archivo) {
       'Plan de cuentas actualizado',
     );
     await Promise.all([cargarCuentas(), cargarPanel()]);
+    return resultado;
   } catch (error) {
     avisarError(error);
+    return null;
   }
 }
 
@@ -2388,6 +2399,7 @@ async function enviarPregunta() {
     animarEscritura(respuesta.cuerpo, htmlRespuesta(r.respuesta), {
       alEscribir: () => bajarAlFinal(respuesta.contenedor),
     });
+    adjuntarCuentasCSV(respuesta, r.cuentas_csv);
     adjuntarAsientosCSV(respuesta, r.asientos_csv, r.avisos);
   } catch (error) {
     esperando.remove();
@@ -2963,6 +2975,7 @@ async function enviarPreguntaPira() {
     });
     // La pestaña también muestra la conversación: se replica ahí si está
     // montada, para que las dos vistas no se contradigan.
+    adjuntarCuentasCSV(respuesta, r.cuentas_csv);
     adjuntarAsientosCSV(respuesta, r.asientos_csv, r.avisos);
     replicarEnPestana(texto || '(archivo adjunto)', r);
   } catch (error) {
@@ -3153,6 +3166,79 @@ function descargarBlob(blob, nombre) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Tarjeta con el plan de cuentas que propuso Pira Pires. */
+function adjuntarCuentasCSV(respuesta, csv) {
+  if (!csv || !respuesta?.caja) return;
+  const destino = respuesta.caja.querySelector('.min-w-0') || respuesta.caja;
+  const [, ...filas] = filasCSVAsientos(csv);
+
+  const tarjeta = document.createElement('div');
+  tarjeta.className = 'cuentas-propuestas mt-2 space-y-2 rounded-field border '
+    + 'border-primary-200 bg-primary-50/40 p-3';
+  tarjeta.innerHTML = `
+    <p class="text-xs font-semibold text-surface-700">
+      ${UI.icono('archivo', { tamano: 14 })}
+      Plan de cuentas propuesto: ${filas.length} cuenta(s) · importalo antes que los asientos
+    </p>
+    <div class="max-h-56 overflow-auto rounded-field border border-surface-200">
+      <table class="table text-xs">
+        <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th></tr></thead>
+        <tbody>${filas.map((f) => `
+          <tr class="${f[4] === 'agrupadora' ? 'font-semibold' : ''}">
+            <td class="font-mono whitespace-nowrap">${esc(f[0] || '')}</td>
+            <td>${esc(f[1] || '')}</td>
+            <td>${esc(f[4] || '')}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" class="btn btn-sm btn-primary-fill" data-accion="importar">
+        ${UI.icono('tilde', { tamano: 14 })} Revisar e importar al Plan de cuentas
+      </button>
+      <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="csv">
+        ${UI.icono('descargar', { tamano: 14 })} CSV
+      </button>
+      <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="xlsx">
+        ${UI.icono('descargar', { tamano: 14 })} Plan de cuentas en Excel
+      </button>
+    </div>`;
+
+  const botonImportar = tarjeta.querySelector('[data-accion="importar"]');
+  botonImportar.onclick = async () => {
+    botonImportar.disabled = true;
+    const resultado = await importarCuentasTexto({ csv }, {
+      titulo: 'Revisar plan de cuentas de Pira Pires',
+      tituloErrores: 'El plan propuesto tiene errores',
+    });
+    if (resultado) {
+      botonImportar.innerHTML = `${UI.icono('cheque', { tamano: 14 })} `
+        + `Importadas (${resultado.creadas})`;
+    } else {
+      botonImportar.disabled = false;
+    }
+  };
+
+  const nombre = `plan-de-cuentas-pira-pires-${new Date().toISOString().slice(0, 10)}`;
+  tarjeta.querySelector('[data-accion="csv"]').onclick = () =>
+    descargarTexto(csv, `${nombre}.csv`);
+  tarjeta.querySelector('[data-accion="xlsx"]').onclick = async () => {
+    try {
+      const respuestaExcel = await fetch('/api/excel/desde-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv, nombre, hoja: 'Plan de cuentas' }),
+      });
+      if (!respuestaExcel.ok) throw new Error(`Error ${respuestaExcel.status}`);
+      descargarBlob(await respuestaExcel.blob(), `${nombre}.xlsx`);
+    } catch (error) {
+      avisar(`No se pudo generar el Excel: ${error.message}`, 'danger');
+    }
+  };
+
+  destino.appendChild(tarjeta);
+  bajarAlFinal(respuesta.contenedor);
+}
+
 /** Tarjeta con los asientos propuestos, debajo de la burbuja de respuesta. */
 function adjuntarAsientosCSV(respuesta, csv, avisos = []) {
   if (!csv || !respuesta?.caja) return;
@@ -3251,6 +3337,7 @@ function replicarEnPestana(texto, respuesta) {
   animarEscritura(burbuja.cuerpo, htmlRespuesta(respuesta.respuesta), {
     alEscribir: () => bajarAlFinal(contenedor),
   });
+  adjuntarCuentasCSV(burbuja, respuesta.cuentas_csv);
   adjuntarAsientosCSV(burbuja, respuesta.asientos_csv, respuesta.avisos);
 }
 

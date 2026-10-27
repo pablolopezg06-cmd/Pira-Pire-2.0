@@ -851,8 +851,11 @@ class Manejador(BaseHTTPRequestHandler):
         cuerpo = self._leer_cuerpo()
         from datetime import date
 
-        cuentas = plan_de_cuentas.listar_cuentas(self.ruta_base, solo_detalle=True)
-        contexto = asistente.contexto_empresa(cuentas, date.today().isoformat())
+        cuentas = plan_de_cuentas.listar_cuentas(self.ruta_base)
+        plantilla = "" if cuentas else (
+            RAIZ_WEB / "plantillas" / "cuentas.csv"
+        ).read_text(encoding="utf-8")
+        contexto = asistente.contexto_empresa(cuentas, date.today().isoformat(), plantilla)
         resultado = asistente.preguntar(
             cuerpo.get("pregunta", ""),
             cuerpo.get("historial"),
@@ -863,12 +866,53 @@ class Manejador(BaseHTTPRequestHandler):
         # Cuentas que el modelo usó y que no están en el plan de la empresa:
         # se avisa en la tarjeta para que el usuario las cree antes de importar.
         if resultado.get("asientos_csv"):
-            validas = {c["codigo"] for c in cuentas if c.get("estado") == "ACTIVA"}
+            validas = {
+                c["codigo"] for c in cuentas
+                if c.get("estado") == "ACTIVA" and c.get("recibe_movimiento")
+            }
+            propuestas = {
+                linea.split(";")[0].strip()
+                for linea in (resultado.get("cuentas_csv") or "").splitlines()[1:]
+            }
             usadas = {
                 (linea.split(";") + [""] * 4)[3].strip()
                 for linea in resultado["asientos_csv"].splitlines()[1:]
             }
-            faltan = sorted(c for c in usadas - validas if c)
+
+            # Si el modelo usó cuentas de la plantilla de la cátedra que la
+            # empresa no tiene y no las propuso, el plan se arma acá (sin IA):
+            # esas cuentas más sus cuentas padre que falten.
+            existentes = {c["codigo"] for c in cuentas}
+            plantilla_filas = [
+                linea for linea in (RAIZ_WEB / "plantillas" / "cuentas.csv")
+                .read_text(encoding="utf-8").splitlines()[1:] if linea.strip()
+            ]
+            por_codigo = {linea.split(";")[0]: linea for linea in plantilla_filas}
+            sin_plan = (usadas - validas - propuestas) & set(por_codigo)
+            if sin_plan:
+                necesarias = set()
+                for codigo in sin_plan:
+                    partes = codigo.split(".")
+                    necesarias |= {".".join(partes[:i]) for i in range(1, len(partes) + 1)}
+                nuevas = [
+                    por_codigo[c] for c in sorted(
+                        necesarias - existentes - propuestas,
+                        key=lambda c: tuple(int(p) for p in c.split(".")),
+                    ) if c in por_codigo
+                ]
+                if nuevas:
+                    previas = (resultado.get("cuentas_csv") or "").splitlines()[1:]
+                    resultado["cuentas_csv"] = "\n".join(
+                        [asistente.ENCABEZADO_CSV_CUENTAS, *previas, *nuevas]
+                    ) + "\n"
+                    propuestas |= {linea.split(";")[0] for linea in nuevas}
+
+            faltan = sorted(c for c in usadas - validas - propuestas if c)
+            if (usadas & propuestas) - validas:
+                resultado.setdefault("avisos", []).append(
+                    "Los asientos usan cuentas nuevas del plan propuesto: importá "
+                    "primero el plan de cuentas y después los asientos."
+                )
             if faltan:
                 resultado.setdefault("avisos", []).append(
                     "Estas cuentas no existen (o no son de detalle activas) en tu "
