@@ -834,10 +834,17 @@ class Manejador(BaseHTTPRequestHandler):
 
     def _manejar_asistente_preguntar(self, _: dict) -> None:
         cuerpo = self._leer_cuerpo()
+        from datetime import date
+
+        contexto = asistente.contexto_empresa(
+            plan_de_cuentas.listar_cuentas(self.ruta_base, solo_detalle=True),
+            date.today().isoformat(),
+        )
         resultado = asistente.preguntar(
             cuerpo.get("pregunta", ""),
             cuerpo.get("historial"),
             cuerpo.get("archivos"),
+            contexto,
         )
         self._enviar_json(resultado)
 

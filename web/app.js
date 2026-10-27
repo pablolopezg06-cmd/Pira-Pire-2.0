@@ -2338,9 +2338,10 @@ async function enviarPregunta() {
     esperando.remove();
     // Se crea la burbuja vacía y el texto se escribe de a poco adentro.
     const respuesta = agregarBurbuja('assistant', '', r);
-    animarEscritura(respuesta.cuerpo, markdownBasico(r.respuesta), {
+    animarEscritura(respuesta.cuerpo, htmlRespuesta(r.respuesta), {
       alEscribir: () => bajarAlFinal(respuesta.contenedor),
     });
+    adjuntarAsientosCSV(respuesta, r.asientos_csv);
   } catch (error) {
     esperando.remove();
     agregarFallo(error);
@@ -2905,7 +2906,7 @@ async function enviarPreguntaPira() {
     // La burbuja se crea vacía y Pira la escribe de a poco: mientras redacta
     // mantiene la boca abierta, y la cierra recién cuando termina.
     const respuesta = agregarBurbuja('assistant', '', r, opciones);
-    animarEscritura(respuesta.cuerpo, markdownBasico(r.respuesta), {
+    animarEscritura(respuesta.cuerpo, htmlRespuesta(r.respuesta), {
       alEscribir: () => bajarAlFinal(respuesta.contenedor),
       alTerminar: () => {
         marcarPiraHablando(false);
@@ -2915,6 +2916,7 @@ async function enviarPreguntaPira() {
     });
     // La pestaña también muestra la conversación: se replica ahí si está
     // montada, para que las dos vistas no se contradigan.
+    adjuntarAsientosCSV(respuesta, r.asientos_csv);
     replicarEnPestana(texto || '(archivo adjunto)', r);
   } catch (error) {
     esperando.remove();
@@ -3033,15 +3035,122 @@ function resumenAdjuntosPira() {
   return `📎 ${piraArchivos.length === 1 ? 'Archivo' : 'Archivos'}: ${nombres}`;
 }
 
+// ---------------------------------------------------------------------------
+// Asientos propuestos por Pira Pires (CSV del importador)
+// ---------------------------------------------------------------------------
+//
+// Cuando el usuario le pasa un borrador de operaciones, el asistente responde
+// con los asientos en un bloque ```csv```, en el mismo formato que la
+// plantilla del importador. El servidor extrae ese bloque (`asientos_csv`):
+// acá se saca del texto de la burbuja y se muestra aparte, como tabla, con
+// botones para copiarlo o descargarlo.
+
+/** Markdown de la respuesta sin los bloques de código (el CSV va aparte). */
+function htmlRespuesta(texto) {
+  const limpio = String(texto || '').replace(/```[^\n]*\n[\s\S]*?```/g, '').trim();
+  return markdownBasico(limpio || texto || '');
+}
+
+/** Separa el CSV de asientos en filas de celdas (separador `;`). */
+function filasCSVAsientos(csv) {
+  return String(csv || '').trim().split(/\r?\n/).filter(Boolean)
+    .map((linea) => linea.split(';').map((celda) => celda.trim()));
+}
+
+/** Tabla con las líneas de los asientos propuestos, agrupadas por asiento. */
+function tablaAsientosPropuestos(csv) {
+  const [, ...filas] = filasCSVAsientos(csv);
+  let anterior = null;
+  const cuerpo = filas.map((f) => {
+    const cabecera = f[0] !== anterior
+      ? `<tr class="bg-surface-100/60"><td colspan="4" class="font-semibold">
+           Asiento ${esc(f[0] || '')} · ${esc(f[1] || '')} · ${esc(f[2] || '')}
+         </td></tr>`
+      : '';
+    anterior = f[0];
+    return `${cabecera}
+      <tr>
+        <td class="font-mono whitespace-nowrap">${esc(f[3] || '')}</td>
+        <td>${esc(f[4] || '')}</td>
+        <td class="whitespace-nowrap text-right tabular-nums">${esc(f[5] || '')}</td>
+        <td class="whitespace-nowrap text-right tabular-nums">${esc(f[6] || '')}</td>
+      </tr>`;
+  }).join('');
+  return `
+    <div class="max-h-56 overflow-auto rounded-field border border-surface-200">
+      <table class="table text-xs">
+        <thead><tr>
+          <th>Cuenta</th><th>Detalle</th>
+          <th class="text-right">Debe</th><th class="text-right">Haber</th>
+        </tr></thead>
+        <tbody>${cuerpo}</tbody>
+      </table>
+    </div>`;
+}
+
+/** Descarga un texto como archivo, sin pasar por el servidor. */
+function descargarTexto(texto, nombre, tipo = 'text/csv;charset=utf-8') {
+  // El BOM hace que Excel abra el CSV con los acentos bien.
+  const blob = new Blob(['﻿', texto], { type: tipo });
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = nombre;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Tarjeta con los asientos propuestos, debajo de la burbuja de respuesta. */
+function adjuntarAsientosCSV(respuesta, csv) {
+  if (!csv || !respuesta?.caja) return;
+  const destino = respuesta.caja.querySelector('.min-w-0') || respuesta.caja;
+  const asientos = new Set(filasCSVAsientos(csv).slice(1).map((f) => f[0])).size;
+
+  const tarjeta = document.createElement('div');
+  tarjeta.className = 'asientos-propuestos mt-2 space-y-2 rounded-field border '
+    + 'border-primary-200 bg-primary-50/40 p-3';
+  tarjeta.innerHTML = `
+    <p class="text-xs font-semibold text-surface-700">
+      ${UI.icono('archivo', { tamano: 14 })}
+      Asientos propuestos: ${asientos} · formato CSV del importador
+    </p>
+    ${tablaAsientosPropuestos(csv)}
+    <div class="flex flex-wrap gap-2">
+      <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="copiar">
+        Copiar CSV
+      </button>
+      <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="csv">
+        ${UI.icono('descargar', { tamano: 14 })} Descargar CSV
+      </button>
+    </div>`;
+
+  tarjeta.querySelector('[data-accion="copiar"]').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(csv);
+      avisar('El CSV quedó en el portapapeles.', 'success', 'Copiado');
+    } catch {
+      avisar('No se pudo copiar: descargalo como archivo.', 'warning');
+    }
+  };
+  tarjeta.querySelector('[data-accion="csv"]').onclick = () =>
+    descargarTexto(csv, `asientos-pira-pires-${new Date().toISOString().slice(0, 10)}.csv`);
+
+  destino.appendChild(tarjeta);
+  bajarAlFinal(respuesta.contenedor);
+}
+
 /** Refleja en la pestaña del asistente una charla hecha desde la burbuja. */
 function replicarEnPestana(texto, respuesta) {
   const contenedor = $('#asistente-historial');
   if (!contenedor) return;
   agregarBurbuja('user', markdownBasico(texto));
   const burbuja = agregarBurbuja('assistant', '', respuesta);
-  animarEscritura(burbuja.cuerpo, markdownBasico(respuesta.respuesta), {
+  animarEscritura(burbuja.cuerpo, htmlRespuesta(respuesta.respuesta), {
     alEscribir: () => bajarAlFinal(contenedor),
   });
+  adjuntarAsientosCSV(burbuja, respuesta.asientos_csv);
 }
 
 /** Agrega una burbuja al historial y baja hasta el final.

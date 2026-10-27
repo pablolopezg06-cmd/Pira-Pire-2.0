@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -142,10 +143,87 @@ JSON con datos contables. Cuando llegue un archivo:
   la liquidación o el análisis, pero aclará siempre de dónde sale cada número.
 · Si el archivo no tiene relación con contabilidad o impuestos, decilo.
 
+BORRADOR DE OPERACIONES → ASIENTOS EN CSV
+Cuando el usuario te pase un borrador de operaciones (ventas, compras, pagos,
+cobros, sueldos ya liquidados, etc.), en el mensaje o en un archivo adjunto,
+y te pida registrarlas o armar los asientos:
+· Explicá en pocas líneas el criterio de cada asiento (qué cuenta se debita,
+  cuál se acredita y por qué; cómo separaste el IVA).
+· Después escribí TODOS los asientos en un único bloque de código con la
+  etiqueta csv, exactamente con este formato (el del importador del sistema):
+  ```csv
+  asiento;fecha;concepto;cuenta;detalle;debe;haber
+  1;2026-01-10;Venta de mercaderías al contado;1.1.01;Cobro en efectivo;1.100.000,00;
+  1;2026-01-10;Venta de mercaderías al contado;4.1.01;Venta gravada;;1.000.000,00
+  1;2026-01-10;Venta de mercaderías al contado;2.1.02;IVA débito fiscal;;100.000,00
+  ```
+· Reglas del CSV: separador punto y coma; una fila por línea del asiento;
+  todas las filas de un mismo asiento repiten número, fecha y concepto; fecha
+  AAAA-MM-DD; importes en formato paraguayo (punto de miles, coma decimal) y
+  la otra columna vacía; nunca importes negativos; cada asiento con al menos
+  dos líneas y total Debe = total Haber.
+· Usá SOLO códigos de cuentas de detalle activas del plan de cuentas de la
+  empresa, que se te informa más abajo. Si una operación necesita una cuenta
+  que no existe, no la inventes: decí cuál habría que crear y dejá ese asiento
+  fuera del CSV.
+· Si falta un dato imprescindible (importe, fecha, si incluye IVA, forma de
+  pago), preguntalo antes de generar el CSV. Si no se indica la fecha, usá la
+  fecha de hoy y aclaralo.
+· No escribas nada dentro del bloque csv que no sea el encabezado y las filas.
+
 LÍMITE
 No asumís el rol de contador que firma declaraciones juradas ni emitís
 conceptos vinculantes: sos una guía de estudio.
 """
+
+#: Encabezado del CSV de asientos que entiende `erp.importacion`.
+ENCABEZADO_CSV_ASIENTOS = "asiento;fecha;concepto;cuenta;detalle;debe;haber"
+
+
+def contexto_empresa(cuentas: list[dict], hoy: str) -> str:
+    """
+    Arma el bloque de contexto que se agrega al prompt de sistema: la fecha
+    de hoy y las cuentas de detalle activas, que son las únicas en las que el
+    modelo puede proponer movimientos.
+    """
+    lineas = [
+        f"- {c['codigo']} · {c['nombre']}"
+        for c in cuentas
+        if c.get("recibe_movimiento") and c.get("estado") == "ACTIVA"
+    ]
+    plan = "\n".join(lineas) if lineas else (
+        "(El plan de cuentas está vacío: si te piden asientos, pedí que "
+        "primero carguen el plan de cuentas.)"
+    )
+    return (
+        f"\nCONTEXTO DE LA EMPRESA\nFecha de hoy: {hoy}\n"
+        f"Cuentas de detalle activas (código · nombre):\n{plan}\n"
+    )
+
+
+#: Bloque ```csv … ``` (o sin etiqueta, si empieza con el encabezado).
+_PATRON_BLOQUE_CSV = re.compile(r"```[ \t]*(csv)?[ \t]*\r?\n(.*?)```", re.S | re.I)
+
+
+def extraer_csv_asientos(texto: str) -> str | None:
+    """
+    Devuelve el CSV de asientos que el modelo escribió en la respuesta, o
+    ``None`` si no hay ninguno. Si hay varios bloques, se unen (sin repetir
+    el encabezado) para importarlos juntos.
+    """
+    filas: list[str] = []
+    for coincidencia in _PATRON_BLOQUE_CSV.finditer(texto or ""):
+        contenido = [l.strip() for l in coincidencia.group(2).strip().splitlines()]
+        contenido = [l for l in contenido if l]
+        if not contenido:
+            continue
+        cabecera = contenido[0].lower().replace(" ", "")
+        if not (cabecera.startswith("asiento;") and ";debe;haber" in cabecera):
+            continue
+        filas.extend(contenido[1:])
+    if not filas:
+        return None
+    return ENCABEZADO_CSV_ASIENTOS + "\n" + "\n".join(filas) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +361,12 @@ def _llamar_gemini(proveedor: dict, clave: str, mensajes: list[dict]) -> dict:
                     partes.append({"inlineData": {"mimeType": tipo, "data": datos}})
         return partes
 
+    # El prompt de sistema (con el contexto de la empresa) es el primer
+    # mensaje; Gemini lo recibe aparte, como systemInstruction.
+    sistema = next(
+        (m["content"] for m in mensajes if m["role"] == "system"),
+        INSTRUCCION_SISTEMA,
+    )
     contenido = [
         {"role": "model" if m["role"] == "assistant" else "user",
          "parts": _partes(m)}
@@ -296,7 +380,7 @@ def _llamar_gemini(proveedor: dict, clave: str, mensajes: list[dict]) -> dict:
                 {
                     "contents": contenido,
                     # El prompt de sistema es un systemInstruction aparte.
-                    "systemInstruction": {"parts": [{"text": INSTRUCCION_SISTEMA}]},
+                    "systemInstruction": {"parts": [{"text": sistema}]},
                     "generationConfig": {
                         "temperature": 0.2,
                         "maxOutputTokens": proveedor["tokens"],
@@ -457,6 +541,7 @@ def preguntar(
     pregunta: str,
     historial: list[dict] | None = None,
     archivos: list[dict] | None = None,
+    contexto: str = "",
 ) -> dict:
     """
     Envía la consulta al asistente e intenta los proveedores en orden.
@@ -466,7 +551,13 @@ def preguntar(
     JSON. Las imágenes viajan al modelo con visión; el texto se agrega al
     mensaje como contexto.
 
-    Devuelve ``{respuesta, proveedor, modelo, tiempo_ms, intentos}`` donde
+    ``contexto`` se agrega al prompt de sistema (ver ``contexto_empresa``):
+    la fecha de hoy y el plan de cuentas, para que los asientos que proponga
+    el modelo usen códigos reales.
+
+    Devuelve ``{respuesta, asientos_csv, proveedor, modelo, tiempo_ms,
+    intentos}``, donde ``asientos_csv`` es el CSV de asientos que trae la
+    respuesta (o ``None``) y
     ``intentos`` lista qué probó y qué pasó en cada caso, para poder
     mostrar al usuario que hubo un respaldo.
 
@@ -480,7 +571,9 @@ def preguntar(
     if len(pregunta) > 4000:
         raise ErrorAsistente("La pregunta es demasiado larga (máximo 4000 caracteres).")
 
-    mensajes: list[dict] = [{"role": "system", "content": INSTRUCCION_SISTEMA}]
+    mensajes: list[dict] = [
+        {"role": "system", "content": INSTRUCCION_SISTEMA + (contexto or "")}
+    ]
     for mensaje in (historial or [])[-10:]:
         if mensaje.get("role") in {"user", "assistant"} and mensaje.get("content"):
             mensajes.append(
@@ -535,6 +628,7 @@ def preguntar(
         })
         return {
             "respuesta": r["texto"],
+            "asientos_csv": extraer_csv_asientos(r["texto"]),
             "proveedor": proveedor["nombre"],
             "modelo": r["modelo"],
             "tiempo_ms": int((time.monotonic() - empezado) * 1000),
