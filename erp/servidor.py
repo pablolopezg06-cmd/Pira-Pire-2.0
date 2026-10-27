@@ -851,16 +851,30 @@ class Manejador(BaseHTTPRequestHandler):
         cuerpo = self._leer_cuerpo()
         from datetime import date
 
-        contexto = asistente.contexto_empresa(
-            plan_de_cuentas.listar_cuentas(self.ruta_base, solo_detalle=True),
-            date.today().isoformat(),
-        )
+        cuentas = plan_de_cuentas.listar_cuentas(self.ruta_base, solo_detalle=True)
+        contexto = asistente.contexto_empresa(cuentas, date.today().isoformat())
         resultado = asistente.preguntar(
             cuerpo.get("pregunta", ""),
             cuerpo.get("historial"),
             cuerpo.get("archivos"),
             contexto,
         )
+
+        # Cuentas que el modelo usó y que no están en el plan de la empresa:
+        # se avisa en la tarjeta para que el usuario las cree antes de importar.
+        if resultado.get("asientos_csv"):
+            validas = {c["codigo"] for c in cuentas if c.get("estado") == "ACTIVA"}
+            usadas = {
+                (linea.split(";") + [""] * 4)[3].strip()
+                for linea in resultado["asientos_csv"].splitlines()[1:]
+            }
+            faltan = sorted(c for c in usadas - validas if c)
+            if faltan:
+                resultado.setdefault("avisos", []).append(
+                    "Estas cuentas no existen (o no son de detalle activas) en tu "
+                    f"plan de cuentas: {', '.join(faltan)}. Crealas o importá la "
+                    "plantilla de cuentas antes de importar los asientos."
+                )
         self._enviar_json(resultado)
 
     # ------------------------------------------------------------------

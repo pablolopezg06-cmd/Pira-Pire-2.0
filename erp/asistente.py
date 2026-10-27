@@ -66,6 +66,7 @@ import re
 import time
 import urllib.error
 import urllib.request
+from datetime import date
 
 from .excepciones import ErrorOperacionInvalida
 
@@ -265,6 +266,61 @@ def contexto_empresa(cuentas: list[dict], hoy: str) -> str:
 
 #: Bloque ```csv … ``` (o sin etiqueta, si empieza con el encabezado).
 _PATRON_BLOQUE_CSV = re.compile(r"```[ \t]*(csv)?[ \t]*\r?\n(.*?)```", re.S | re.I)
+
+
+_PATRON_FECHA = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
+
+
+def revisar_asientos(borrador: str, csv_asientos: str | None) -> list[str]:
+    """
+    Control de completitud de los asientos que propuso el modelo.
+
+    El modelo a veces se saltea una operación de un borrador largo. Acá se
+    revisa, sin IA, que:
+
+    * cada fecha que aparece en el borrador tenga al menos un asiento, y
+    * cada fecha con una venta (cuenta 4 al Haber) tenga también su asiento
+      de costo (cuenta 5 al Debe), como pide la cátedra.
+
+    Devuelve la lista de avisos; vacía si no se detectó nada.
+    """
+    if not csv_asientos:
+        return []
+
+    fechas_borrador: list[str] = []
+    for dia, mes, anio in _PATRON_FECHA.findall(borrador or ""):
+        try:
+            iso = date(int(anio), int(mes), int(dia)).isoformat()
+        except ValueError:
+            continue
+        if iso not in fechas_borrador:
+            fechas_borrador.append(iso)
+
+    fechas_csv: set[str] = set()
+    ventas: set[str] = set()
+    costos: set[str] = set()
+    for linea in csv_asientos.splitlines()[1:]:
+        celdas = (linea.split(";") + [""] * 7)[:7]
+        fecha, cuenta, debe, haber = celdas[1].strip(), celdas[3].strip(), celdas[5], celdas[6]
+        fechas_csv.add(fecha)
+        if cuenta.startswith("4") and haber.strip():
+            ventas.add(fecha)
+        if cuenta.startswith("5") and debe.strip():
+            costos.add(fecha)
+
+    def corta(iso: str) -> str:
+        return f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}"
+
+    avisos: list[str] = []
+    if len(fechas_borrador) >= 2:
+        for iso in fechas_borrador:
+            if iso not in fechas_csv:
+                avisos.append(f"Falta el asiento de la operación del {corta(iso)}.")
+    for iso in sorted(ventas - costos):
+        avisos.append(
+            f"La venta del {corta(iso)} no tiene su asiento de costo de ventas."
+        )
+    return avisos
 
 
 def extraer_csv_asientos(texto: str) -> str | None:
@@ -700,9 +756,36 @@ def preguntar(
             "estado": "respondió",
             "detalle": r["modelo"],
         })
+
+        # Si propuso asientos, se controla que no falte ninguna operación del
+        # borrador. Ante un faltante se le pide una sola vez que complete.
+        borrador = f"{pregunta}\n{texto_archivos}"
+        csv_asientos = extraer_csv_asientos(r["texto"])
+        avisos = revisar_asientos(borrador, csv_asientos)
+        if avisos:
+            try:
+                r2 = llamador(proveedor, clave, mensajes + [
+                    {"role": "assistant", "content": r["texto"]},
+                    {"role": "user", "content": (
+                        "Revisé tu propuesta y está incompleta:\n- "
+                        + "\n- ".join(avisos)
+                        + "\nVolvé a escribir la respuesta con el bloque csv "
+                        "COMPLETO: todos los asientos del borrador, numerados "
+                        "de nuevo. Si falta una cuenta en el plan, decí cuál "
+                        "hay que crear."
+                    )},
+                ])
+                csv2 = extraer_csv_asientos(r2["texto"])
+                avisos2 = revisar_asientos(borrador, csv2)
+                if csv2 and len(avisos2) < len(avisos):
+                    r, csv_asientos, avisos = r2, csv2, avisos2
+            except Exception:  # noqa: BLE001 - queda la primera propuesta, con avisos
+                pass
+
         return {
             "respuesta": r["texto"],
-            "asientos_csv": extraer_csv_asientos(r["texto"]),
+            "asientos_csv": csv_asientos,
+            "avisos": avisos,
             "proveedor": proveedor["nombre"],
             "modelo": r["modelo"],
             "tiempo_ms": int((time.monotonic() - empezado) * 1000),

@@ -2388,7 +2388,7 @@ async function enviarPregunta() {
     animarEscritura(respuesta.cuerpo, htmlRespuesta(r.respuesta), {
       alEscribir: () => bajarAlFinal(respuesta.contenedor),
     });
-    adjuntarAsientosCSV(respuesta, r.asientos_csv);
+    adjuntarAsientosCSV(respuesta, r.asientos_csv, r.avisos);
   } catch (error) {
     esperando.remove();
     agregarFallo(error);
@@ -2963,7 +2963,7 @@ async function enviarPreguntaPira() {
     });
     // La pestaña también muestra la conversación: se replica ahí si está
     // montada, para que las dos vistas no se contradigan.
-    adjuntarAsientosCSV(respuesta, r.asientos_csv);
+    adjuntarAsientosCSV(respuesta, r.asientos_csv, r.avisos);
     replicarEnPestana(texto || '(archivo adjunto)', r);
   } catch (error) {
     esperando.remove();
@@ -3154,7 +3154,7 @@ function descargarBlob(blob, nombre) {
 }
 
 /** Tarjeta con los asientos propuestos, debajo de la burbuja de respuesta. */
-function adjuntarAsientosCSV(respuesta, csv) {
+function adjuntarAsientosCSV(respuesta, csv, avisos = []) {
   if (!csv || !respuesta?.caja) return;
   const destino = respuesta.caja.querySelector('.min-w-0') || respuesta.caja;
   const asientos = new Set(filasCSVAsientos(csv).slice(1).map((f) => f[0])).size;
@@ -3167,6 +3167,13 @@ function adjuntarAsientosCSV(respuesta, csv) {
       ${UI.icono('archivo', { tamano: 14 })}
       Asientos propuestos: ${asientos} · formato CSV del importador
     </p>
+    ${(avisos || []).length ? `
+      <div class="rounded-field border border-warning-300 bg-warning-50 p-2 text-xs text-warning-800">
+        <p class="font-semibold">Ojo: la propuesta parece incompleta</p>
+        <ul class="list-disc pl-4">${avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>
+        <p class="mt-1">Pedile a Pira Pires que lo complete, o revisá si falta
+          alguna cuenta en el plan de cuentas.</p>
+      </div>` : ''}
     ${tablaAsientosPropuestos(csv)}
     <div class="flex flex-wrap gap-2">
       <button type="button" class="btn btn-sm btn-primary-fill" data-accion="importar">
@@ -3239,7 +3246,7 @@ function replicarEnPestana(texto, respuesta) {
   animarEscritura(burbuja.cuerpo, htmlRespuesta(respuesta.respuesta), {
     alEscribir: () => bajarAlFinal(contenedor),
   });
-  adjuntarAsientosCSV(burbuja, respuesta.asientos_csv);
+  adjuntarAsientosCSV(burbuja, respuesta.asientos_csv, respuesta.avisos);
 }
 
 /** Agrega una burbuja al historial y baja hasta el final.
