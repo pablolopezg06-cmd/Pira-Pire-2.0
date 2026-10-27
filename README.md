@@ -1,4 +1,6 @@
-# Mini ERP Contable
+# Pira-Pire-2.0 — Mini ERP Contable
+
+Prueba de versión de la nueva página de Pira Pires.
 
 Sistema contable web que implementa la **Etapa 3** del enunciado: *plan de
 cuentas, operaciones, estructura del Libro Diario, estructura del Libro Mayor,
