@@ -16,6 +16,23 @@ El Libro Mayor y el Balance **no tienen tablas propias**: son consultas sobre
 el Libro Diario. Por eso no se pueden cargar "a mano" y siempre reflejan
 exactamente lo que se contabilizó (controles 4 y 5 del enunciado).
 
+> Versión propia basada en el proyecto **Mini-ERP-PiraPires** original, con
+> estas mejoras:
+>
+> 1. **Borrador → asientos.** Si le pasás a Pira Pires un borrador de
+>    operaciones (en el chat o en un archivo adjunto), arma los asientos en el
+>    formato CSV del importador, usando solo cuentas de detalle activas de tu
+>    plan de cuentas.
+> 2. **«Revisar e importar al Libro Diario».** Los asientos propuestos
+>    aparecen como tabla debajo de la respuesta. El botón abre una vista
+>    previa con la validación completa (cuadre, cuentas existentes, fechas) y
+>    recién al confirmar se guardan.
+> 3. **Excel (.xlsx) además de CSV.** Se pueden importar plan de cuentas y
+>    asientos desde Excel, descargar las plantillas en Excel y exportar el
+>    plan de cuentas y el Libro Diario a CSV o Excel. Todo sigue funcionando
+>    sin dependencias externas: el .xlsx se lee y se escribe con la
+>    biblioteca estándar (`erp/excel.py`).
+
 ---
 
 ## Cómo se usa
@@ -225,7 +242,9 @@ El pez mantiene la boca abierta mientras escribe y la cierra al terminar.
 * **imágenes** (capturas de pantalla, fotos de libros o balances) → se mandan
   al modelo con visión;
 * **CSV, TXT, JSON, MD y TSV** → se leen como texto y se agregan al mensaje;
-* **PDF y hojas de cálculo** → se aceptan, pero como no hay extractor de texto
+* **Excel (.xlsx)** → se convierte la primera hoja a CSV y se agrega al
+  mensaje;
+* **PDF y .xls viejos** → se aceptan, pero como no hay extractor de texto
   en la biblioteca estándar se le avisa al modelo que no se pudieron leer y se
   recomienda pasarlos como imagen o CSV.
 
@@ -601,8 +620,12 @@ códigos HTTP con sentido.
 | POST | `/api/iva/liquidar` | Contabilizar la liquidación del período |
 | GET | `/api/asistente/configuracion` | Estado de los proveedores de la IA |
 | POST | `/api/asistente` | Consultar a Pira Pires (acepta `archivos` en base64) |
-| POST | `/api/importar/cuentas` | Validar (vista previa) o importar un plan de cuentas CSV |
-| POST | `/api/importar/asientos` | Validar (vista previa) o importar asientos CSV |
+| POST | `/api/importar/cuentas` | Validar (vista previa) o importar un plan de cuentas (`csv` o `xlsx` en base64) |
+| POST | `/api/importar/asientos` | Validar (vista previa) o importar asientos (`csv` o `xlsx` en base64) |
+| GET | `/api/exportar/cuentas?formato=csv\|xlsx` | Descargar el plan de cuentas |
+| GET | `/api/exportar/asientos?formato=csv\|xlsx` | Descargar los asientos confirmados (acepta `desde` y `hasta`) |
+| GET | `/api/plantillas/{cuentas\|asientos}.xlsx` | Plantillas del importador en Excel |
+| POST | `/api/excel/desde-csv` | Convertir a Excel un CSV (lo usa la tarjeta de asientos del chat) |
 | POST | `/api/datos-demo` | Cargar las 15 operaciones |
 | POST | `/api/reiniciar` | Vaciar la base |
 
