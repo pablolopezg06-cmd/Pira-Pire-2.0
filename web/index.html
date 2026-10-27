@@ -1123,7 +1123,7 @@
           <div class="card-header flex-wrap gap-2">
             <div>
               <h2 class="card-title">Cargar tus propios datos</h2>
-              <p class="card-subtitle">Importación desde CSV · plan de cuentas y asientos</p>
+              <p class="card-subtitle">Importación desde CSV o Excel (.xlsx) · plan de cuentas y asientos</p>
             </div>
             <span class="ml-auto text-xs text-surface-500">Máximo 1,5 MB por archivo</span>
           </div>
@@ -1144,6 +1144,10 @@
                      href="plantillas/cuentas.csv" download>
                     Plantilla CSV
                   </a>
+                  <a class="btn btn-sm btn-secondary-outline"
+                     href="/api/plantillas/cuentas.xlsx" download>
+                    Plantilla Excel
+                  </a>
                   <button id="panel-importar-cuentas" type="button"
                           class="btn btn-sm btn-primary-outline">
                     Importar cuentas
@@ -1161,6 +1165,10 @@
                      href="plantillas/asientos.csv" download>
                     Plantilla CSV
                   </a>
+                  <a class="btn btn-sm btn-secondary-outline"
+                     href="/api/plantillas/asientos.xlsx" download>
+                    Plantilla Excel
+                  </a>
                   <button id="panel-importar-asientos" type="button"
                           class="btn btn-sm btn-primary-outline">
                     Importar asientos
@@ -1171,10 +1179,11 @@
             <p class="mt-3 text-xs text-surface-500">
               El orden importa: primero se cargan las cuentas y después los asientos.
               Si tu CSV usa coma decimal, guardalo con punto y coma (;) como separador.
+              En Excel se lee la primera hoja, con los mismos encabezados que la plantilla.
             </p>
           </div>
-          <input id="archivo-cuentas" type="file" accept=".csv,text/csv,.txt" class="oculto">
-          <input id="archivo-asientos" type="file" accept=".csv,text/csv,.txt" class="oculto">
+          <input id="archivo-cuentas" type="file" accept=".csv,text/csv,.txt,.xlsx" class="oculto">
+          <input id="archivo-asientos" type="file" accept=".csv,text/csv,.txt,.xlsx" class="oculto">
         </div>
 
         <div class="card mt-4">
@@ -1219,9 +1228,17 @@
                    href="plantillas/cuentas.csv" download>
                   Plantilla
                 </a>
+                <a class="btn btn-sm btn-secondary-outline"
+                   href="/api/exportar/cuentas?formato=csv" download>
+                  Exportar CSV
+                </a>
+                <a class="btn btn-sm btn-secondary-outline"
+                   href="/api/exportar/cuentas?formato=xlsx" download>
+                  Exportar Excel
+                </a>
                 <button id="btn-importar-cuentas" type="button"
                         class="btn btn-sm btn-primary-outline">
-                  Importar CSV
+                  Importar CSV / Excel
                 </button>
                 <label class="sr-only" for="cuenta-busqueda">Buscar cuenta</label>
                 <input id="cuenta-busqueda" type="search" placeholder="Buscar cuenta…"
@@ -1287,9 +1304,19 @@
                  href="plantillas/asientos.csv" download>
                 Plantilla
               </a>
+              <a class="btn btn-sm btn-secondary-outline"
+                 href="/api/exportar/asientos?formato=csv" download
+                 title="Asientos confirmados, en el formato del importador">
+                Exportar CSV
+              </a>
+              <a class="btn btn-sm btn-secondary-outline"
+                 href="/api/exportar/asientos?formato=xlsx" download
+                 title="Asientos confirmados, en el formato del importador">
+                Exportar Excel
+              </a>
               <button id="btn-importar-asientos" type="button"
                       class="btn btn-sm btn-primary-outline">
-                Importar CSV
+                Importar CSV / Excel
               </button>
               <label class="sr-only" for="diario-estado">Filtrar por estado</label>
               <select id="diario-estado" class="select input-sm w-40">

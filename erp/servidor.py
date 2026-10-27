@@ -35,6 +35,8 @@ from . import iva
 from . import libro_diario
 from . import libro_mayor
 from . import plan_de_cuentas
+from . import excel
+from . import exportacion
 from . import importacion
 from . import validaciones
 from .dinero import formato_monto
@@ -50,7 +52,7 @@ from .excepciones import (
 RAIZ_WEB = Path(__file__).resolve().parent.parent / "web"
 
 #: Tamaño máximo admitido para el cuerpo de una petición.
-TAMANO_MAXIMO_CUERPO = 2 * 1024 * 1024
+TAMANO_MAXIMO_CUERPO = 3 * 1024 * 1024
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +109,9 @@ RUTAS: list[tuple[str, re.Pattern, str]] = [
     # -- Utilidades -------------------------------------------------------
     ("POST",   r"^/api/importar/cuentas$",                         "importar_cuentas"),
     ("POST",   r"^/api/importar/asientos$",                        "importar_asientos"),
+    ("GET",    r"^/api/exportar/(?P<tipo>cuentas|asientos)$",     "exportar"),
+    ("GET",    r"^/api/plantillas/(?P<tipo>cuentas|asientos)\.xlsx$", "plantilla_xlsx"),
+    ("POST",   r"^/api/excel/desde-csv$",                         "excel_desde_csv"),
     ("POST",   r"^/api/datos-demo$",                              "datos_demo"),
     ("POST",   r"^/api/reiniciar$",                              "reiniciar"),
 ]
@@ -130,6 +135,16 @@ class Manejador(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(cuerpo)
+
+    def _enviar_archivo(self, contenido: bytes, tipo: str, nombre: str) -> None:
+        """Respuesta binaria que el navegador guarda como archivo."""
+        self.send_response(200)
+        self.send_header("Content-Type", tipo)
+        self.send_header("Content-Length", str(len(contenido)))
+        self.send_header("Content-Disposition", f'attachment; filename="{nombre}"')
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(contenido)
 
     def _enviar_error(self, excepcion: Exception) -> None:
         """Traduce una excepción del dominio a una respuesta HTTP con sentido."""
@@ -863,14 +878,33 @@ class Manejador(BaseHTTPRequestHandler):
             detalles.append(f"… y {len(errores) - limite} error(es) más.")
         return detalles
 
-    def _manejar_importar_cuentas(self, _: dict) -> None:
-        datos = self._leer_cuerpo()
+    @staticmethod
+    def _texto_a_importar(datos: dict) -> str:
+        """
+        CSV a importar. Un Excel llega en base64 (campo ``xlsx``) y se
+        convierte acá a CSV, así pasa por exactamente las mismas validaciones.
+        """
+        if datos.get("xlsx"):
+            import base64
+            import binascii
+
+            try:
+                contenido = base64.b64decode(str(datos["xlsx"]), validate=False)
+            except (binascii.Error, ValueError) as exc:
+                raise ErrorValidacion("El archivo Excel llegó dañado.") from exc
+            return excel.a_csv(contenido)
+
         texto = datos.get("csv")
         if not isinstance(texto, str) or not texto.strip():
-            raise ErrorValidacion("Seleccioná un archivo CSV con datos.")
+            raise ErrorValidacion("Seleccioná un archivo CSV o Excel con datos.")
+        return texto
+
+    def _manejar_importar_cuentas(self, _: dict) -> None:
+        datos = self._leer_cuerpo()
         confirmar = bool(datos.get("confirmar", False))
 
         try:
+            texto = self._texto_a_importar(datos)
             resultado = importacion.importar_cuentas(
                 texto, self.ruta_base, confirmar=confirmar
             )
@@ -909,12 +943,10 @@ class Manejador(BaseHTTPRequestHandler):
 
     def _manejar_importar_asientos(self, _: dict) -> None:
         datos = self._leer_cuerpo()
-        texto = datos.get("csv")
-        if not isinstance(texto, str) or not texto.strip():
-            raise ErrorValidacion("Seleccioná un archivo CSV con datos.")
         confirmar = bool(datos.get("confirmar", False))
 
         try:
+            texto = self._texto_a_importar(datos)
             resultado = importacion.importar_asientos(
                 texto, self.ruta_base, confirmar=confirmar
             )
@@ -950,6 +982,42 @@ class Manejador(BaseHTTPRequestHandler):
             )
 
         self._enviar_json(resultado, 201 if resultado["confirmado"] else 200)
+
+    # ------------------------------------------------------------------
+    # Manejadores: exportación a CSV y Excel
+    # ------------------------------------------------------------------
+
+    def _manejar_exportar(self, argumentos: dict) -> None:
+        parametros = self._parametros()
+        formato = "xlsx" if parametros.get("formato") == "xlsx" else "csv"
+        filtros = (
+            {"desde": parametros.get("desde"), "hasta": parametros.get("hasta")}
+            if argumentos["tipo"] == "asientos" else {}
+        )
+        self._enviar_archivo(
+            *exportacion.exportar(argumentos["tipo"], formato, self.ruta_base, **filtros)
+        )
+
+    def _manejar_plantilla_xlsx(self, argumentos: dict) -> None:
+        """La misma plantilla CSV de ``web/plantillas``, en formato Excel."""
+        tipo = argumentos["tipo"]
+        texto = (RAIZ_WEB / "plantillas" / f"{tipo}.csv").read_text(encoding="utf-8")
+        hoja = "Plan de cuentas" if tipo == "cuentas" else "Libro Diario"
+        self._enviar_archivo(
+            excel.desde_csv(texto, hoja),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            f"plantilla-{tipo}.xlsx",
+        )
+
+    def _manejar_excel_desde_csv(self, _: dict) -> None:
+        """Convierte a Excel un CSV armado en el navegador (p. ej. el de Pira Pires)."""
+        datos = self._leer_cuerpo()
+        nombre = re.sub(r"[^\w.-]+", "-", str(datos.get("nombre") or "datos"))[:60]
+        self._enviar_archivo(
+            excel.desde_csv(str(datos.get("csv") or ""), str(datos.get("hoja") or "Hoja1")),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            f"{nombre.removesuffix('.xlsx')}.xlsx",
+        )
 
     def _manejar_datos_demo(self, _: dict) -> None:
         from . import datos_demo

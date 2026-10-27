@@ -29,9 +29,10 @@ Características
 5. **Archivos adjuntos.** Además de texto, acepta archivos que el usuario
    adjunta desde el chat: **imágenes** (capturas, fotos de balances), que se
    mandan al modelo con visión, y **CSV, TXT, JSON y similares**, que se leen
-   como texto y se agregan al mensaje. Los formatos que no se pueden leer con
-   la biblioteca estándar (PDF, planillas de Excel) se informan como tales en
-   vez de mandarse como binario. Esto permite pasarle a Pira Pires los datos
+   como texto y se agregan al mensaje. Las planillas **Excel (.xlsx)** se
+   convierten a CSV con ``erp.excel``. Los formatos que no se pueden leer con
+   la biblioteca estándar (PDF, .xls viejos) se informan como tales en vez de
+   mandarse como binario. Esto permite pasarle a Pira Pires los datos
    de un balance y que trabaje sobre números reales.
 
 Configuración
@@ -133,7 +134,7 @@ liquidación de empleados o nómina:
 
 ARCHIVOS Y DATOS DEL BALANCE
 El usuario puede adjuntar archivos: imágenes (capturas de pantalla, fotos de
-libros o balances), hojas de cálculo exportadas a CSV, y archivos de texto o
+libros o balances), planillas de Excel (.xlsx) o CSV, y archivos de texto o
 JSON con datos contables. Cuando llegue un archivo:
 · Leelo con atención y usá los datos reales que contiene; no los inventes ni
   los completes con supuestos.
@@ -470,6 +471,18 @@ def _texto_de_archivo(archivo: dict, datos: bytes) -> str | None:
 
     if tipo.startswith("image/"):
         return None
+
+    if nombre.endswith(".xlsx") or "spreadsheetml" in tipo:
+        from . import excel
+        from .excepciones import ErrorERP
+
+        try:
+            texto = excel.a_csv(datos)
+        except ErrorERP:
+            return None
+        if len(texto) > MAXIMO_TEXTO_ARCHIVO:
+            texto = texto[:MAXIMO_TEXTO_ARCHIVO] + "\n… (archivo recortado)"
+        return f"(Planilla de Excel convertida a CSV, primera hoja)\n{texto}"
 
     extensiones_texto = (".txt", ".csv", ".json", ".md", ".log", ".tsv", ".xml")
     if not (tipo.startswith("text/") or tipo in {"application/json", "application/csv"}

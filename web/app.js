@@ -685,9 +685,24 @@ function contenidoPrevioAsientos(previa) {
     </div>`;
 }
 
-/** Lee el archivo como UTF-8 y valida el tamaño antes de enviarlo. */
+/** ¿Es una planilla de Excel moderna (.xlsx)? */
+function esExcel(archivo) {
+  return /\.xlsx$/i.test(archivo?.name || '')
+    || archivo?.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+}
+
+/**
+ * Lee el archivo a importar y valida el tamaño antes de enviarlo. Devuelve
+ * el cuerpo para la API: `{ csv }` con el texto, o `{ xlsx }` con el Excel
+ * en base64 (el servidor lo convierte a CSV y lo valida igual).
+ */
 async function leerArchivoCSV(archivo) {
   if (!archivo) return null;
+  if (/\.xls$/i.test(archivo.name || '')) {
+    avisar('El formato .xls (Excel 97-2003) no se puede leer. Guardalo como .xlsx o CSV.',
+      'danger', 'Formato no soportado');
+    return null;
+  }
   if (archivo.size > LIMITE_CSV_BYTES) {
     avisar(
       'El archivo supera el máximo de 1,5 MB. Dividilo en partes más chicas.',
@@ -697,27 +712,40 @@ async function leerArchivoCSV(archivo) {
     return null;
   }
   try {
+    if (esExcel(archivo)) {
+      return { xlsx: await archivoABase64(archivo) };
+    }
     const texto = await archivo.text();
     if (!texto.trim()) {
       avisar('El archivo está vacío.', 'danger', 'CSV vacío');
       return null;
     }
-    return texto;
+    return { csv: texto };
   } catch {
-    avisar('No se pudo leer el archivo.', 'danger', 'Error al leer el CSV');
+    avisar('No se pudo leer el archivo.', 'danger', 'Error al leer el archivo');
     return null;
   }
 }
 
+/** Contenido de un archivo en base64 (sin el prefijo `data:`). */
+function archivoABase64(archivo) {
+  return new Promise((resolver, rechazar) => {
+    const lector = new FileReader();
+    lector.onload = () => resolver(String(lector.result).split(',')[1] || '');
+    lector.onerror = () => rechazar(lector.error);
+    lector.readAsDataURL(archivo);
+  });
+}
+
 async function importarCuentasCSV(archivo) {
-  const texto = await leerArchivoCSV(archivo);
-  if (texto === null) return;
+  const contenido = await leerArchivoCSV(archivo);
+  if (contenido === null) return;
 
   let previa;
   try {
     previa = await api('/api/importar/cuentas', {
       method: 'POST',
-      body: { csv: texto, confirmar: false },
+      body: { ...contenido, confirmar: false },
     });
   } catch (error) {
     avisarError(error);
@@ -761,7 +789,7 @@ async function importarCuentasCSV(archivo) {
   try {
     const resultado = await api('/api/importar/cuentas', {
       method: 'POST',
-      body: { csv: texto, confirmar: true },
+      body: { ...contenido, confirmar: true },
     });
     avisar(
       `Se importaron ${resultado.creadas} cuenta(s).` +
@@ -776,22 +804,23 @@ async function importarCuentasCSV(archivo) {
 }
 
 async function importarAsientosCSV(archivo) {
-  const texto = await leerArchivoCSV(archivo);
-  if (texto === null) return;
-  await importarAsientosTexto(texto);
+  const contenido = await leerArchivoCSV(archivo);
+  if (contenido === null) return;
+  await importarAsientosTexto(contenido);
 }
 
 /**
- * Vista previa y confirmación de asientos en formato CSV. La usan el
- * importador de archivos y la tarjeta de asientos propuestos por Pira Pires.
- * Devuelve el resultado de la importación, o `null` si no se guardó nada.
+ * Vista previa y confirmación de asientos. `contenido` es `{ csv }` o
+ * `{ xlsx }`. La usan el importador de archivos y la tarjeta de asientos
+ * propuestos por Pira Pires. Devuelve el resultado de la importación, o
+ * `null` si no se guardó nada.
  */
-async function importarAsientosTexto(texto, opciones = {}) {
+async function importarAsientosTexto(contenido, opciones = {}) {
   let previa;
   try {
     previa = await api('/api/importar/asientos', {
       method: 'POST',
-      body: { csv: texto, confirmar: false },
+      body: { ...contenido, confirmar: false },
     });
   } catch (error) {
     avisarError(error);
@@ -835,7 +864,7 @@ async function importarAsientosTexto(texto, opciones = {}) {
   try {
     const resultado = await api('/api/importar/asientos', {
       method: 'POST',
-      body: { csv: texto, confirmar: true },
+      body: { ...contenido, confirmar: true },
     });
     avisar(
       `Se importaron ${resultado.creados} asiento(s) confirmados.`,
@@ -3109,7 +3138,11 @@ function tablaAsientosPropuestos(csv) {
 /** Descarga un texto como archivo, sin pasar por el servidor. */
 function descargarTexto(texto, nombre, tipo = 'text/csv;charset=utf-8') {
   // El BOM hace que Excel abra el CSV con los acentos bien.
-  const blob = new Blob(['﻿', texto], { type: tipo });
+  descargarBlob(new Blob(['\ufeff', texto], { type: tipo }), nombre);
+}
+
+/** Guarda un Blob con el nombre indicado. */
+function descargarBlob(blob, nombre) {
   const url = URL.createObjectURL(blob);
   const enlace = document.createElement('a');
   enlace.href = url;
@@ -3143,14 +3176,17 @@ function adjuntarAsientosCSV(respuesta, csv) {
         Copiar CSV
       </button>
       <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="csv">
-        ${UI.icono('descargar', { tamano: 14 })} Descargar CSV
+        ${UI.icono('descargar', { tamano: 14 })} CSV
+      </button>
+      <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="xlsx">
+        ${UI.icono('descargar', { tamano: 14 })} Excel
       </button>
     </div>`;
 
   const botonImportar = tarjeta.querySelector('[data-accion="importar"]');
   botonImportar.onclick = async () => {
     botonImportar.disabled = true;
-    const resultado = await importarAsientosTexto(csv, {
+    const resultado = await importarAsientosTexto({ csv }, {
       titulo: 'Revisar asientos de Pira Pires',
       tituloErrores: 'Los asientos propuestos tienen errores',
       ayudaErrores: 'Podés pedirle a Pira Pires que los corrija: copiá el error '
@@ -3173,8 +3209,22 @@ function adjuntarAsientosCSV(respuesta, csv) {
       avisar('No se pudo copiar: descargalo como archivo.', 'warning');
     }
   };
+  const nombre = `asientos-pira-pires-${new Date().toISOString().slice(0, 10)}`;
   tarjeta.querySelector('[data-accion="csv"]').onclick = () =>
-    descargarTexto(csv, `asientos-pira-pires-${new Date().toISOString().slice(0, 10)}.csv`);
+    descargarTexto(csv, `${nombre}.csv`);
+  tarjeta.querySelector('[data-accion="xlsx"]').onclick = async () => {
+    try {
+      const respuesta = await fetch('/api/excel/desde-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv, nombre, hoja: 'Libro Diario' }),
+      });
+      if (!respuesta.ok) throw new Error(`Error ${respuesta.status}`);
+      descargarBlob(await respuesta.blob(), `${nombre}.xlsx`);
+    } catch (error) {
+      avisar(`No se pudo generar el Excel: ${error.message}`, 'danger');
+    }
+  };
 
   destino.appendChild(tarjeta);
   bajarAlFinal(respuesta.contenedor);
