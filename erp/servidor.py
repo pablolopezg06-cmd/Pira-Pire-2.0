@@ -1006,7 +1006,8 @@ class Manejador(BaseHTTPRequestHandler):
         formato = "xlsx" if parametros.get("formato") == "xlsx" else "csv"
         filtros = (
             {"desde": parametros.get("desde"), "hasta": parametros.get("hasta")}
-            if argumentos["tipo"] == "asientos" else {}
+            if argumentos["tipo"] == "asientos"
+            else {"completar": parametros.get("completar") == "1"}
         )
         self._enviar_archivo(
             *exportacion.exportar(argumentos["tipo"], formato, self.ruta_base, **filtros)

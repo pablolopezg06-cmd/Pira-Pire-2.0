@@ -297,7 +297,12 @@ def _estado_cuenta(valor: str) -> str | None:
 
 def _clave_orden_codigo(codigo: str) -> tuple:
     """Ordena '1.2' antes que '1.10' y antes que sus subcuentas."""
-    return tuple(int(parte) for parte in str(codigo).split("."))
+    # Un código inválido (p. ej. una fecha que puso Excel) va al final en vez
+    # de romper el orden: el error ya se informa en la validación.
+    try:
+        return (0, *(int(parte) for parte in str(codigo).split(".")))
+    except ValueError:
+        return (1, str(codigo))
 
 
 def _fecha_iso(valor: str) -> tuple[str | None, str | None]:
@@ -385,7 +390,10 @@ def importar_cuentas(
                     errores.append(_error(
                         linea,
                         f"El código '{codigo}' no tiene un formato válido "
-                        "(se espera 1, 1.1 o 1.1.01).",
+                        "(se espera 1, 1.1 o 1.1.01)."
+                        + (" Excel lo convirtió en fecha: poné la columna del "
+                           "código con formato Texto y volvé a escribirlo."
+                           if re.fullmatch(r"\d{4}-\d{2}-\d{2}", codigo) else ""),
                         "C3",
                     ))
 
@@ -471,6 +479,9 @@ def importar_cuentas(
                 codigo_original=cuenta["codigo"],
             )
             for problema in problemas:
+                if re.fullmatch(r"\d{4}-\d{2}-\d{2}", cuenta["codigo"]):
+                    problema += (" Excel lo convirtió en fecha: poné la columna del "
+                                 "código con formato Texto y volvé a escribirlo.")
                 errores.append(_error(cuenta["fila"], problema, "C3"))
 
         nuevas = [cuenta for cuenta in candidatas if not cuenta["omitida"]]
@@ -611,6 +622,90 @@ def _agrupar_asientos(
     return grupos
 
 
+def _codigos_por_nombre(ruta: str | None) -> dict[str, str]:
+    """``{nombre normalizado: código}`` de las cuentas de detalle del plan."""
+    with conectar(ruta) as conexion:
+        filas = conexion.execute(
+            "SELECT codigo, nombre FROM cuenta WHERE recibe_movimiento = 1"
+        ).fetchall()
+    return {_norm(f["nombre"]): f["codigo"] for f in filas}
+
+
+def _codigo_de_nombre(nombre: str, codigos: dict[str, str]) -> str:
+    """
+    Busca la cuenta por nombre: primero exacto (sin acentos ni signos) y si
+    no, la única cuenta cuyo nombre contiene al buscado o viceversa. Si no la
+    encuentra devuelve el nombre tal cual, y la validación avisa que no existe.
+    """
+    texto = str(nombre or "").strip()
+    if validaciones.FORMATO_CODIGO.fullmatch(texto):
+        return texto
+    clave = _norm(texto)
+    if clave in codigos:
+        return codigos[clave]
+    parecidas = {c for n, c in codigos.items() if clave and (clave in n or n in clave)}
+    return parecidas.pop() if len(parecidas) == 1 else texto
+
+
+def _desde_formato_clase(texto: str, ruta: str | None) -> str:
+    """
+    Convierte un Libro Diario con el formato de las planillas de clase
+    (NRO · FECHA · CUENTAS CONTABLES · DEBE · HABER, el concepto en una fila
+    sin importes debajo de cada asiento y «SUMAS IGUALES» al final) al CSV del
+    importador. Si el texto no tiene ese formato, lo devuelve sin cambios.
+    """
+    texto = (texto or "").lstrip("﻿")
+    try:
+        delimitador = csv.Sniffer().sniff(texto[:2000], delimiters=";,\t|").delimiter
+    except csv.Error:
+        delimitador = ";"
+    filas = list(csv.reader(io.StringIO(texto), delimiter=delimitador))
+
+    cabecera = None
+    for indice, celdas in enumerate(filas[:15]):
+        nombres = [_norm(c) for c in celdas]
+        if "nro" in nombres and "cuentascontables" in nombres and "debe" in nombres:
+            cabecera = (indice, {n: i for i, n in enumerate(nombres) if n})
+            break
+    if cabecera is None:
+        return texto
+
+    inicio, columnas = cabecera
+    c_nro, c_fecha = columnas.get("nro"), columnas.get("fecha")
+    c_cuenta, c_debe, c_haber = columnas["cuentascontables"], columnas["debe"], columnas.get("haber")
+    codigos = _codigos_por_nombre(ruta)
+
+    def celda(celdas: list[str], i: int | None) -> str:
+        return celdas[i].strip() if i is not None and i < len(celdas) else ""
+
+    asientos: list[dict] = []
+    actual: dict | None = None
+    for celdas in filas[inicio + 1:]:
+        nro, cuenta = celda(celdas, c_nro), celda(celdas, c_cuenta)
+        debe, haber = celda(celdas, c_debe), celda(celdas, c_haber)
+        if _norm(cuenta).startswith("sumasiguales"):
+            break
+        if nro:
+            actual = {"nro": nro, "fecha": celda(celdas, c_fecha), "concepto": "", "lineas": []}
+            asientos.append(actual)
+        if actual is None or not cuenta:
+            continue
+        if not debe and not haber:
+            # Fila sin importes debajo del asiento: es el concepto.
+            actual["concepto"] = actual["concepto"] or cuenta
+            continue
+        actual["lineas"].append((_codigo_de_nombre(cuenta, codigos), cuenta, debe, haber))
+
+    salida = io.StringIO()
+    escritor = csv.writer(salida, delimiter=";", lineterminator="\n")
+    escritor.writerow(COLUMNAS_ASIENTOS)
+    for a in asientos:
+        concepto = a["concepto"] or f"Asiento {a['nro']}"
+        for codigo, _nombre, debe, haber in a["lineas"]:
+            escritor.writerow([a["nro"], a["fecha"], concepto, codigo, "", debe, haber])
+    return salida.getvalue()
+
+
 def importar_asientos(
     texto: str,
     ruta: str | None = None,
@@ -623,7 +718,11 @@ def importar_asientos(
     Cada grupo debe tener al menos dos líneas, cuentas existentes/activas/de
     detalle y total Debe = total Haber. Se guardan como CONFIRMADO en una sola
     transacción. Con ``confirmar=False`` sólo se devuelve la vista previa.
+
+    También acepta el Libro Diario con el formato de las planillas de clase
+    (ver ``_desde_formato_clase``), con las cuentas por nombre.
     """
+    texto = _desde_formato_clase(texto, ruta)
     filas = _leer_tabla(texto, "asientos")
     errores: list[dict] = []
 

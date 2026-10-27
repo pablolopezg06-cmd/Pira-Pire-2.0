@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import io
+from pathlib import Path
 
 from . import excel
 from .base_datos import conectar, ruta_base_datos
@@ -23,21 +24,38 @@ from .dinero import desde_centavos, formato_monto
 from .importacion import COLUMNAS_ASIENTOS, COLUMNAS_CUENTAS
 
 
-def filas_cuentas(ruta: str | None = None) -> list[list]:
-    """Plan de cuentas completo, ordenado por jerarquía."""
+#: Plantilla del plan de cuentas (con las cuentas de la cátedra).
+PLANTILLA_CUENTAS = Path(__file__).resolve().parent.parent / "web" / "plantillas" / "cuentas.csv"
+
+
+def filas_cuentas(ruta: str | None = None, *, completar: bool = False) -> list[list]:
+    """
+    Plan de cuentas completo, ordenado por jerarquía.
+
+    Con ``completar=True`` se agregan las cuentas de la plantilla que la
+    empresa todavía no tiene: al importar ese archivo, las existentes se
+    omiten y solo se crean las que faltan.
+    """
     with conectar(ruta_base_datos(ruta)) as conexion:
         filas = conexion.execute(
             """SELECT codigo, nombre, clasificacion, naturaleza,
                       recibe_movimiento, estado
                  FROM cuenta ORDER BY orden, codigo"""
         ).fetchall()
-    return [
+    resultado = [
         [
             f["codigo"], f["nombre"], f["clasificacion"], f["naturaleza"],
             "detalle" if f["recibe_movimiento"] else "agrupadora", f["estado"],
         ]
         for f in filas
     ]
+    if completar:
+        existentes = {fila[0] for fila in resultado}
+        lector = csv.reader(io.StringIO(PLANTILLA_CUENTAS.read_text(encoding="utf-8")), delimiter=";")
+        next(lector, None)
+        resultado += [fila for fila in lector if fila and fila[0] not in existentes]
+        resultado.sort(key=lambda fila: tuple(int(p) for p in str(fila[0]).split(".")))
+    return resultado
 
 
 def filas_asientos(
@@ -95,7 +113,8 @@ def exportar(
     ``"xlsx"``.
     """
     if tipo == "cuentas":
-        encabezados, filas, hoja = COLUMNAS_CUENTAS, filas_cuentas(ruta), "Plan de cuentas"
+        encabezados, hoja = COLUMNAS_CUENTAS, "Plan de cuentas"
+        filas = filas_cuentas(ruta, completar=bool(filtros.get("completar")))
         importes: tuple[int, ...] = ()
     else:
         encabezados, hoja = COLUMNAS_ASIENTOS, "Libro Diario"

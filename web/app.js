@@ -3188,6 +3188,11 @@ function adjuntarAsientosCSV(respuesta, csv, avisos = []) {
       <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="xlsx">
         ${UI.icono('descargar', { tamano: 14 })} Libro Diario en Excel
       </button>
+      <a class="btn btn-sm btn-secondary-outline" download
+         href="/api/exportar/cuentas?formato=xlsx&completar=1"
+         title="Tu plan de cuentas más las cuentas de la cátedra que falten, listo para importar">
+        ${UI.icono('descargar', { tamano: 14 })} Plan de cuentas en Excel
+      </a>
     </div>`;
 
   const botonImportar = tarjeta.querySelector('[data-accion="importar"]');
