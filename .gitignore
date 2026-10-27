@@ -1,0 +1,28 @@
+# -----------------------------------------------------------------------------
+# Datos locales: la base SQLite se regenera sola en cada arranque.
+# No tiene sentido versionarla.
+# -----------------------------------------------------------------------------
+datos/
+*.db
+*.sqlite
+*.sqlite3
+
+# -----------------------------------------------------------------------------
+# Secretos: las claves de API del asistente nunca van al repositorio.
+# Si se filtran, hay que rotarlas desde el panel de cada proveedor.
+# -----------------------------------------------------------------------------
+claves.env
+.env
+*.key
+
+# Bytecode de Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

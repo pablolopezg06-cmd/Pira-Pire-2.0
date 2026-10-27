@@ -1,0 +1,7 @@
+asiento;fecha;concepto;cuenta;detalle;debe;haber
+1;2026-01-10;Venta de mercaderías al contado;1.1.01;Cobro en efectivo;1.100.000,00;
+1;2026-01-10;Venta de mercaderías al contado;4.1.01;Venta gravada;;1.000.000,00
+1;2026-01-10;Venta de mercaderías al contado;2.1.02;IVA débito fiscal;;100.000,00
+2;2026-01-12;Compra de mercaderías al contado;1.1.04;Mercaderías;500.000,00;
+2;2026-01-12;Compra de mercaderías al contado;1.1.05;IVA crédito fiscal;50.000,00;
+2;2026-01-12;Compra de mercaderías al contado;1.1.01;Pago en efectivo;;550.000,00

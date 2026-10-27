@@ -1,0 +1,28 @@
+codigo;nombre;clasificacion;naturaleza;tipo;estado
+1;ACTIVO;1;;agrupadora;ACTIVA
+1.1;ACTIVO CORRIENTE;1;;agrupadora;ACTIVA
+1.1.01;Caja;1;D;detalle;ACTIVA
+1.1.02;Banco;1;D;detalle;ACTIVA
+1.1.03;Clientes;1;D;detalle;ACTIVA
+1.1.04;Mercaderías;1;D;detalle;ACTIVA
+1.1.05;IVA Crédito Fiscal;1;D;detalle;ACTIVA
+1.1.06;IVA a Recuperar;1;D;detalle;ACTIVA
+1.2;ACTIVO NO CORRIENTE;1;;agrupadora;ACTIVA
+1.2.01;Muebles y Equipos;1;D;detalle;ACTIVA
+1.2.02;Depreciación Acumulada;1;A;detalle;ACTIVA
+2;PASIVO;2;;agrupadora;ACTIVA
+2.1;PASIVO CORRIENTE;2;;agrupadora;ACTIVA
+2.1.01;Proveedores;2;A;detalle;ACTIVA
+2.1.02;IVA Débito Fiscal;2;A;detalle;ACTIVA
+2.1.03;IVA por Pagar;2;A;detalle;ACTIVA
+3;PATRIMONIO NETO;3;;agrupadora;ACTIVA
+3.1;Capital;3;A;detalle;ACTIVA
+4;INGRESOS;4;;agrupadora;ACTIVA
+4.1;Ventas;4;;agrupadora;ACTIVA
+4.1.01;Ventas Gravadas;4;A;detalle;ACTIVA
+4.1.02;Ventas Exentas;4;A;detalle;ACTIVA
+5;COSTOS;5;;agrupadora;ACTIVA
+5.1;Costo de Mercaderías Vendidas;5;D;detalle;ACTIVA
+6;GASTOS;6;;agrupadora;ACTIVA
+6.1;Gastos Administrativos;6;D;detalle;ACTIVA
+6.2;Gastos de Ventas;6;D;detalle;ACTIVA

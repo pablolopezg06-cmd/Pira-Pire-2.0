@@ -1,0 +1,1723 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini ERP Contable</title>
+
+<!--
+  Inter es la tipografía que fija TailGrids para toda la interfaz. Se
+  pide por CDN; si no hay internet, la pila de respaldo declarada en
+  --font-sans (system-ui y compañía) toma el lugar y el resto del
+  diseño no se resiente. El resto del CSS es local: Tailwind compila en
+  el navegador desde vendor/.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+
+<!--
+  Tailwind CSS v4 (build "browser"), el mismo motor que usa 21st.dev.
+  Se carga desde vendor/ para que el sistema funcione sin internet.
+  Para experimentarlo en línea, reemplazá la ruta por:
+    https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4
+-->
+<script src="vendor/tailwindcss-browser.js"></script>
+
+<style type="text/tailwindcss">
+  /* =====================================================================
+     TOKENS DEL DESIGN SYSTEM
+     Equivalente conceptual de un tailwind.config.js: define las variables
+     que después se usan como clases (bg-primary-600, rounded-card, etc.).
+     Editá lo que quieras acá y se refleja en toda la aplicación.
+     ===================================================================== */
+  @theme {
+    /* --- primary: verde de acción ----------------------------------
+       Paleta del tema «WhatsApp» de la comunidad de 21st.dev
+       (@serafimcloud): verde esmeralda vivo sobre gris frío.
+       Los tres tonos que definen el tema son 600 (base), 700 (hover) y
+       50 (fondo de realce); el resto del ramp se interpola para que las
+       utilidades intermedias (anillos, bordes) no queden inventadas. */
+    --color-primary-50:  #e7f8f0;  /* fondo de realce del tema */
+    --color-primary-100: #d0f1e0;
+    --color-primary-200: #a3e6c1;
+    --color-primary-300: #70d79e;
+    --color-primary-400: #4acb84;
+    --color-primary-500: #25d366;  /* verde vivo: el acento del tema */
+    --color-primary-600: #118442;  /* Primary: botones y enlaces */
+    --color-primary-700: #075e54;  /* Primary Dark: hover y activo */
+    --color-primary-800: #064b43;
+    --color-primary-900: #053b35;
+    --color-primary-950: #032622;
+
+    /* --- success: verde de confirmación --------------------------- */
+    --color-success-50:  #f0fdf4;  /* Success Light */
+    --color-success-100: #dcfce7;
+    --color-success-200: #bbf7d0;
+    --color-success-300: #86efac;
+    --color-success-400: #4ade80;
+    --color-success-500: #22c55e;  /* Success */
+    --color-success-600: #16a34a;  /* Success Dark */
+    --color-success-700: #15803d;
+    --color-success-800: #166534;
+
+    /* --- danger: rojo de error --------------------------------------
+       Solo semántico: nunca decorativo. */
+    --color-danger-50:  #fef2f2;  /* Danger Light */
+    --color-danger-100: #fee2e2;
+    --color-danger-200: #fecaca;
+    --color-danger-300: #fca5a5;
+    --color-danger-400: #f87171;
+    --color-danger-500: #ef4444;  /* Danger */
+    --color-danger-600: #dc2626;  /* Danger Dark */
+    --color-danger-700: #b91c1c;
+    --color-danger-800: #991b1b;
+
+    /* --- warning: ámbar de advertencia ------------------------------ */
+    --color-warning-50:  #fffbeb;  /* Warning Light */
+    --color-warning-100: #fef3c7;
+    --color-warning-200: #fde68a;
+    --color-warning-300: #fcd34d;
+    --color-warning-400: #fbbf24;
+    --color-warning-500: #f59e0b;  /* Warning */
+    --color-warning-600: #d97706;  /* Warning Dark */
+    --color-warning-700: #b45309;
+    --color-warning-800: #92400e;
+
+    /* --- info: celeste de aviso ------------------------------------- */
+    --color-info-50:  #f0f9ff;
+    --color-info-100: #e0f2fe;
+    --color-info-200: #bae6fd;
+    --color-info-500: #0ea5e9;  /* Info */
+    --color-info-600: #0284c7;  /* Info Dark */
+    --color-info-700: #0369a1;
+
+    /* --- surface: grises de la interfaz -----------------------------
+       El tema «WhatsApp» no usa la escala gray de Tailwind: usa un gris
+       frío propio que arranca en #F0F2F5 (fondo de página) y termina en
+       #09090B (texto). «surface» es el alias que usa el HTML para no
+       depender del nombre de la escala. */
+    --color-surface-50:  #f0f2f5;  /* fondo de página */
+    --color-surface-100: #e9edef;  /* campos, filas alternadas, sidebar */
+    --color-surface-200: #e3e7ea;  /* bordes de tarjeta y de divisor */
+    --color-surface-300: #c7cace;  /* borde de campo, separadores fuertes */
+    --color-surface-400: #9da2a6;  /* placeholder, icono en reposo */
+    --color-surface-500: #6c6c6d;  /* texto secundario, encabezado de tabla */
+    --color-surface-600: #545455;
+    --color-surface-700: #3b3b3c;  /* texto de campo, subtítulos */
+    --color-surface-800: #232324;  /* texto de cuerpo */
+    --color-surface-900: #09090b;  /* títulos, texto de máximo contraste */
+    --color-tinta:      #09090b;  /* negro de marca, sin matiz de color */
+
+    /* --- radios ------------------------------------------------------
+       TailGrids fija 8px como radio estándar (botones, tarjetas,
+       campos) y 12px para superficies elevadas y diálogos. La guía
+       prohíbe radios fuera de la escala: ni 5, ni 10, ni 15. */
+    --radius-card: 0.5rem;   /*  8px: tarjeta, botón, campo */
+    --radius-field: 0.5rem;  /*  8px */
+    --radius-modal: 0.75rem; /* 12px: diálogo, tarjeta elevada */
+    --radius-panel: 0.75rem;
+
+    /* --- sombras ----------------------------------------------------
+       Todas teñidas de #09090B (el negro del tema) y no de negro puro:
+       es lo que da el aire "Crisp Open Canvas" en lugar de un gris
+       sucio. La elevación sube por pasos: tarjeta sm, desplegable md,
+       popover lg, modal 2xl. */
+    --shadow-xs:  0 1px 2px 0 rgb(9 9 11 / 0.06);
+    --shadow-sm:  0 1px 3px 0 rgb(9 9 11 / 0.10), 0 1px 2px 0 rgb(9 9 11 / 0.06);
+    --shadow-md:  0 4px 6px -1px rgb(9 9 11 / 0.10), 0 2px 4px -1px rgb(9 9 11 / 0.06);
+    --shadow-lg:  0 10px 15px -3px rgb(9 9 11 / 0.10), 0 4px 6px -2px rgb(9 9 11 / 0.05);
+    --shadow-xl:  0 20px 25px -5px rgb(9 9 11 / 0.10), 0 10px 10px -5px rgb(9 9 11 / 0.04);
+    --shadow-2xl: 0 25px 50px -12px rgb(9 9 11 / 0.25);
+
+    /* Alias que usa el HTML. Van escritos al pie de la letra y no como
+       `var(--shadow-sm)`: dentro de `@theme` una referencia a otra
+       variable no la registra Tailwind como usada, así que podría
+       podarse y dejar la sombra sin resolver. */
+    --shadow-panel: 0 1px 3px 0 rgb(9 9 11 / 0.10), 0 1px 2px 0 rgb(9 9 11 / 0.06);
+    --shadow-float: 0 25px 50px -12px rgb(9 9 11 / 0.25);
+
+    /* --- tipografía --------------------------------------------------
+       Inter es la única familia de UI; la monoespaciada es solo para
+       datos y códigos. Si no se puede cargar Inter (sin internet), cae
+       en la pila del sistema, que es la que la propia guía declara como
+       sustituto. */
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+                 Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+
+  /* =====================================================================
+     BASE
+     ===================================================================== */
+  @layer base {
+    html { -webkit-text-size-adjust: 100%; }
+
+    /* ---------------- Modo oscuro ----------------
+       En vez de duplicar el tema entero, se redefinen los tokens que
+       sostienen la interfaz: `surface` (la escala de grises), `white` (el
+       fondo de todas las tarjetas) y el negro de las sombras. Como el HTML
+       está escrito en términos de `bg-white` y `surface-*`, con girar estos
+       valores gira toda la aplicación, sin tocar una sola clase del marcado.
+
+       La escala se da vuelta: `surface-50` (fondo de página) pasa a ser casi
+       negro y `surface-900` (texto de máximo contraste) pasa a ser casi
+       blanco; `white` deja de ser blanco y se convierte en el gris de las
+       tarjetas. Son los grises del propio tema oscuro de WhatsApp. */
+    [data-tema="oscuro"] {
+      --color-white:       #1f2c34;  /* fondo de tarjetas y paneles */
+      --color-surface-50:  #0b141a;  /* fondo de página */
+      --color-surface-100: #111c22;  /* campos, filas, sidebar */
+      --color-surface-200: #22303a;  /* bordes de tarjeta y divisor */
+      --color-surface-300: #2f3d47;  /* borde de campo */
+      --color-surface-400: #6b7a85;  /* placeholder, icono en reposo */
+      --color-surface-500: #8696a0;  /* texto secundario */
+      --color-surface-600: #a8b4bc;
+      --color-surface-700: #cfd9de;  /* texto de campo, subtítulos */
+      --color-surface-800: #e3e9ec;  /* texto de cuerpo */
+      --color-surface-900: #f0f4f6;  /* títulos, máximo contraste */
+      --color-tinta:       #000000;  /* sombras */
+      /* El verde se aclara para no perder contraste sobre el fondo oscuro:
+         #118442 no llega, #25d366 sí. */
+      --color-primary-600: #1fa855;
+      --color-primary-700: #25d366;
+      color-scheme: dark;
+    }
+
+    /* Cuerpo: 14px / 1.60 / peso 400 en gray-800, que es la combinación
+       que la guía fija para todo el texto de la aplicación. */
+    body {
+      font-family: var(--font-sans);
+      font-feature-settings: "cv01", "cv03", "cv04";
+      font-size: 14px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      /* El cambio de tema no debe dar un salto brusco de color. */
+      transition: background-color 200ms ease-out;
+    }
+
+    /* Títulos: 600 con -0.01em. El tracking negativo solo se permite a
+       partir de 20px, nunca en el cuerpo del texto. */
+    h1, h2, h3, h4 {
+      color: var(--color-surface-900);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    /* Etiquetas y rótulos sobre campos: 12px, 500, +0.05em. */
+    .rotulo {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+    }
+
+    /* Foco visible y consistente en toda la app (lo que aporta React Aria
+       en los componentes de TailGrids, hecho a mano aquí): anillo de
+       3px de Primary al 20%, sin desplazar el diseño. Va en el verde del
+       tema, no en el índigo anterior. */
+    :focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgb(37 211 102 / 0.25);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: var(--color-surface-100); }
+    ::-webkit-scrollbar-thumb {
+      background: var(--color-surface-300);
+      border-radius: 6px;
+      border: 2px solid var(--color-surface-100);
+    }
+    ::-webkit-scrollbar-thumb:hover { background: var(--color-surface-400); }
+  }
+
+  /* =====================================================================
+     COMPONENTES
+     Un `@apply` por propiedad; si un componente tiene partes dinámicas
+     (como los botones, que combinan variant + appearance + size), las
+     clases se componen desde ui.js.
+     ===================================================================== */
+  @layer components {
+
+    /* ---------------- Card ----------------
+       Superficie base: blanco, radio 8px, borde 1px gray-200, sombra
+       sm y padding de 24px. La sombra es baja a propósito: la
+       jerarquía se construye primero con pasos de color de fondo. */
+    .card {
+      @apply rounded-card border border-surface-200 bg-white shadow-panel;
+    }
+    .card-header {
+      @apply flex items-center gap-3 rounded-t-card border-b border-surface-200
+             px-6 py-4;
+    }
+    .card-title { @apply text-sm font-semibold text-surface-800; }
+    .card-subtitle { @apply text-xs text-surface-500; }
+    .card-body { @apply p-6; }
+    .card-footer {
+      @apply flex flex-wrap items-center gap-2 rounded-b-card border-t
+             border-surface-200 bg-surface-50 px-6 py-3.5;
+    }
+    /* Variante plana: sin sombra, fondo gray-50. Para paneles internos. */
+    .card-plana {
+      @apply rounded-card border border-surface-200 bg-surface-50;
+    }
+
+    /* ---------------- Button ---------------- */
+    /* Base común a todos los botones. Las variantes agregan color. */
+    .btn {
+      @apply inline-flex shrink-0 cursor-pointer items-center justify-center gap-2
+             rounded-field text-sm font-medium whitespace-nowrap select-none
+             transition duration-150;
+    }
+    /* La guía pide un estado deshabilitado visible: 40% de opacidad,
+       nunca ocultar la acción indisponible. */
+    .btn:disabled,
+    .btn[aria-disabled="true"] {
+      @apply pointer-events-none opacity-40;
+    }
+
+    /* El padding de referencia es 10px 24px; el botón fantasma usa
+       10px 16px por ser más discreto. */
+    .btn-xs { @apply h-7 gap-1 px-2.5 text-xs; }
+    .btn-sm { @apply h-9 gap-1.5 px-3.5; }
+    .btn-md { @apply h-10 px-6; }
+    .btn-lg { @apply h-12 gap-2.5 px-6 text-base; }
+    /* iconOnly: cuadrado, sin padding horizontal */
+    .btn-icon.btn-xs { @apply size-7 p-0; }
+    .btn-icon.btn-sm { @apply size-9 p-0; }
+    .btn-icon.btn-md { @apply size-10 p-0; }
+    .btn-icon.btn-lg { @apply size-12 p-0; }
+
+    /* El anillo de foco no se declara por variante: lo aporta el
+       `:focus-visible` de la capa base (3px de Primary al 20%), igual
+       que en los componentes reales de TailGrids. */
+
+    /* appearance = fill (relleno sólido) */
+    .btn-primary-fill   { @apply bg-primary-600 text-[#fff] hover:bg-primary-700 active:bg-primary-800; }
+    .btn-danger-fill    { @apply bg-danger-500  text-[#fff] hover:bg-danger-600  active:bg-danger-700; }
+    .btn-success-fill   { @apply bg-success-500 text-[#fff] hover:bg-success-600 active:bg-success-700; }
+    .btn-warning-fill   { @apply bg-warning-500 text-[#fff] hover:bg-warning-600 active:bg-warning-700; }
+    .btn-secondary-fill { @apply bg-surface-800 text-[#fff] hover:bg-surface-900; }
+    .btn-ghost-fill     { @apply bg-surface-100 text-surface-700 hover:bg-surface-200 active:bg-surface-300; }
+
+    /* appearance = outline (contorno) */
+    .btn-primary-outline   { @apply border-[1.5px] border-primary-600 bg-white text-primary-600 hover:bg-primary-50; }
+    .btn-danger-outline    { @apply border-[1.5px] border-danger-500 bg-white text-danger-500 hover:bg-danger-50; }
+    .btn-success-outline   { @apply border-[1.5px] border-success-500 bg-white text-success-600 hover:bg-success-50; }
+    .btn-warning-outline   { @apply border-[1.5px] border-warning-500 bg-white text-warning-600 hover:bg-warning-50; }
+    .btn-secondary-outline { @apply border-[1.5px] border-surface-300 bg-white text-surface-700 hover:bg-surface-50; }
+    .btn-ghost-outline     { @apply border border-transparent bg-transparent px-4 text-surface-700 hover:bg-surface-100; }
+
+    /* Estado pending: el contenido se atenúa y se muestra un spinner */
+    .btn-pending { @apply cursor-progress; }
+    .btn-pending > .btn-contenido { @apply opacity-60; }
+
+    /* ---------------- Badge ----------------
+       Píldora (radio full), padding 4px 10px, 12px, peso 500. */
+    .badge {
+      @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-1
+             text-xs font-medium whitespace-nowrap;
+    }
+    .badge-primary   { @apply border-primary-200   bg-primary-50   text-primary-700; }
+    .badge-success   { @apply border-success-200   bg-success-50   text-success-700; }
+    .badge-danger    { @apply border-danger-200    bg-danger-50    text-danger-700; }
+    .badge-warning   { @apply border-warning-200   bg-warning-50   text-warning-700; }
+    .badge-secondary { @apply border-surface-200   bg-surface-100   text-surface-600; }
+    .badge-solid-primary { @apply border-transparent bg-primary-600 text-[#fff]; }
+    .badge-solid-success { @apply border-transparent bg-success-500 text-[#fff]; }
+    .badge-solid-danger  { @apply border-transparent bg-danger-500  text-[#fff]; }
+
+    /* ---------------- Formularios ----------------
+       Campo: blanco, texto gray-700, borde gray-300, radio 8px, padding
+       10px 14px, placeholder gray-400. Al enfocar, el borde pasa a
+       Primary con el anillo de 3px al 12%. */
+    .label { @apply mb-1.5 block text-sm font-medium text-surface-700; }
+    .label-requerido { @apply text-danger-600; }
+
+    .input {
+      @apply block h-10 w-full rounded-field border border-surface-300
+             bg-white px-3.5 text-sm text-surface-700 transition
+             placeholder:text-surface-400
+             hover:border-surface-400
+             focus:border-primary-600 focus:ring-3 focus:ring-primary-600/12
+             focus:outline-none
+             disabled:cursor-not-allowed disabled:bg-surface-100
+             disabled:text-surface-500;
+    }
+    .input-error {
+      @apply border-danger-500 focus:border-danger-500 focus:ring-danger-500/12;
+    }
+    .input-sm { @apply h-9 px-2.5; }
+    .textarea {
+      @apply block w-full rounded-field border border-surface-300 bg-white px-3.5
+             py-2 text-sm text-surface-700 transition
+             placeholder:text-surface-400 hover:border-surface-400
+             focus:border-primary-600 focus:ring-3 focus:ring-primary-600/12
+             focus:outline-none;
+    }
+    .select {
+      @apply block h-10 w-full cursor-pointer appearance-none rounded-field
+             border border-surface-300 bg-white py-2 pr-9 pl-3.5 text-sm
+             text-surface-700 transition hover:border-surface-400
+             focus:border-primary-600 focus:ring-3 focus:ring-primary-600/12
+             focus:outline-none
+             disabled:cursor-not-allowed disabled:bg-surface-100;
+      /* chevron dibujado con un gradiente para no depender de un icono */
+      background-image: linear-gradient(45deg, transparent 50%, var(--color-surface-500) 50%),
+                        linear-gradient(135deg, var(--color-surface-500) 50%, transparent 50%);
+      background-position: calc(100% - 17px) calc(50% + 1px),
+                          calc(100% - 12px) calc(50% + 1px);
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+    .checkbox {
+      @apply h-4 w-4 shrink-0 cursor-pointer rounded border-[1.5px]
+             border-surface-300 text-primary-600 transition focus:outline-none
+             focus-visible:ring-2 focus-visible:ring-primary-600/30;
+    }
+    .help-text { @apply mt-1 text-xs text-surface-500; }
+    .error-text { @apply mt-1 text-xs text-danger-600; }
+    .required-mark { @apply text-danger-600; }
+
+    /* ---------------- Tabla ----------------
+       Encabezado: fondo gray-50, texto gray-500, 12px en mayúsculas,
+       peso 600. Filas: fondo blanco, borde inferior gray-200, y al
+       pasar el mouse el fondo pasa a gray-50. */
+    .table-shell {
+      @apply overflow-x-auto rounded-b-card;
+    }
+    .table { @apply w-full border-collapse text-sm; }
+    .table thead th {
+      @apply sticky top-0 z-10 border-b border-surface-200 bg-surface-50
+             px-4 py-3 text-left text-xs font-semibold tracking-wide
+             text-surface-500 uppercase whitespace-nowrap;
+    }
+    .table tbody td {
+      @apply border-b border-surface-200 px-4 py-3 align-middle;
+    }
+    .table tbody tr { @apply transition hover:bg-primary-50/40; }
+    .table tfoot td {
+      @apply border-t-2 border-surface-300 bg-surface-50 px-4 py-3
+             font-semibold text-surface-800;
+    }
+    .num {
+      @apply text-right font-mono text-[13px] tabular-nums;
+    }
+
+    /* ---------------- Alert ----------------
+       Radio 8px, fondo en el tono claro del color semántico y una barra
+       de acento de 4px en el color fuerte del lado izquierdo. La barra
+       es un pseudo-elemento y no un `border-l-4`: dos utilidades de
+       ancho sobre el mismo borde no tienen un orden garantizado. */
+    .alert {
+      @apply relative flex items-start gap-3 rounded-field border p-4 pl-5 text-sm;
+    }
+    .alert::before {
+      content: "";
+      @apply absolute inset-y-[-1px] left-[-1px] w-1 rounded-l-field;
+    }
+    .alert-success { @apply border-success-200 bg-success-50 text-success-800; }
+    .alert-danger  { @apply border-danger-200  bg-danger-50  text-danger-700; }
+    .alert-warning { @apply border-warning-200 bg-warning-50 text-warning-800; }
+    .alert-info    { @apply border-info-200    bg-info-50    text-surface-800; }
+    .alert-success::before { @apply bg-success-500; }
+    .alert-danger::before  { @apply bg-danger-500; }
+    .alert-warning::before { @apply bg-warning-500; }
+    .alert-info::before    { @apply bg-info-500; }
+
+    /* ---------------- Tabs (menú lateral y menú móvil) ----------------
+       En navegación, el estado activo usa Primary Light como fondo, no
+       un relleno del color fuerte. */
+    .tab {
+      @apply relative flex w-full cursor-pointer items-center gap-3 rounded-field
+             px-3 py-2.5 text-sm font-medium text-surface-500 transition
+             hover:bg-surface-100 hover:text-surface-800;
+    }
+    .tab[aria-selected="true"] {
+      @apply bg-primary-50 text-primary-700;
+    }
+    .tab[aria-selected="true"]::before {
+      content: "";
+      @apply absolute inset-y-1.5 left-0 w-1 rounded-full bg-primary-600;
+    }
+    .tab-icon {
+      @apply grid size-6 shrink-0 place-items-center rounded-md bg-surface-100
+             text-[10px] font-bold text-surface-500;
+    }
+    .tab[aria-selected="true"] .tab-icon {
+      @apply bg-primary-600 text-[#fff];
+    }
+    .tab-movil {
+      @apply cursor-pointer whitespace-nowrap rounded-full border
+             border-surface-200 bg-white px-3.5 py-1.5 text-xs font-medium
+             text-surface-600 transition hover:bg-surface-100;
+    }
+    .tab-movil[aria-selected="true"] {
+      @apply border-primary-600 bg-primary-600 text-[#fff];
+    }
+
+    /* ---------------- Dialog ----------------
+       Panel blanco, radio 12px, sombra 2xl, sobre un velo
+       rgba(17,24,39,.4). Anchos de TailGrids: sm 400, md 560, lg 720. */
+    .dialog-overlay {
+      @apply fixed inset-0 z-50 flex items-center justify-center
+             bg-surface-900/40 p-4;
+      animation: aparecer 120ms ease-out;
+    }
+    .dialog {
+      @apply flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col
+             rounded-modal border border-surface-200 bg-white shadow-float;
+      animation: aparecer 150ms ease-out;
+    }
+    .dialog-header { @apply flex items-start gap-3 border-b border-surface-200 px-6 py-4; }
+    .dialog-body { @apply overflow-y-auto px-6 py-5; }
+    .dialog-footer {
+      @apply flex flex-wrap justify-end gap-2 border-t border-surface-200
+             bg-surface-50 px-6 py-3.5;
+    }
+    @keyframes aparecer {
+      from { opacity: 0; transform: translateY(6px) scale(0.98); }
+      to   { opacity: 1; transform: none; }
+    }
+    /* El cursor que parpadea al final de la respuesta mientras se escribe. */
+    @keyframes parpadear {
+      0%, 45%   { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+    /* El puntito de aviso de la burbuja, que late como el de Messenger. */
+    @keyframes latido {
+      0%, 100% { transform: scale(1); }
+      50%      { transform: scale(1.18); }
+    }
+
+    /* ---------------- Toast ----------------
+       Flotante: blanco, borde gray-200, sombra lg, acento izquierdo de
+       4px con el color semántico. */
+    .toast-region {
+      @apply pointer-events-none fixed top-4 right-4 z-60 flex w-full max-w-sm
+             flex-col gap-2;
+    }
+    .toast {
+      @apply pointer-events-auto flex items-start gap-3 rounded-field border
+             border-surface-200 bg-white p-3.5 text-sm shadow-lg;
+      animation: aparecer 150ms ease-out;
+    }
+    .toast-success { @apply border-l-success-500; }
+    .toast-danger  { @apply border-l-danger-500; }
+    .toast-warning { @apply border-l-warning-500; }
+    .toast-info    { @apply border-l-info-500; }
+
+    /* ---------------- Asistente flotante ----------------
+       Burbuja que abre un panel de chat sobre la esquina inferior derecha.
+       El panel se ancla con `fixed` y no empuja el diseño, así que se puede
+       abrir desde cualquier vista sin perder el contexto.
+       z-70 queda por encima de los avisos (z-60) y del diálogo (z-50). */
+    /* La burbuja se arrastra: `touch-none` evita que el navegador del celular
+       interprete el gesto como un scroll y se quede con el movimiento.
+       Al arrastrarla pasa a `absolute` (con `left`/`top` en píxeles); mientras
+       está en su esquina sigue siendo `fixed`, para no depender del scroll.
+
+       El envoltorio agrupa la burbuja, el puntito de aviso y el botón de
+       basura: los tres se mueven juntos al arrastrar, y es el envoltorio (no
+       la burbuja) el que lleva el `fixed` y la posición guardada.
+
+       `touch-none` va acá y no solo en la burbuja: los eventos de puntero se
+       escuchan en el envoltorio, y sin esto el navegador del celular se queda
+       con el gesto (lo interpreta como scroll) y dispara `pointercancel`, que
+       cancela el toque antes de que llegue a abrir el chat. */
+    .pira-envoltorio {
+      @apply fixed right-4 bottom-4 z-70 size-[72px] touch-none
+             sm:right-6 sm:bottom-6;
+    }
+    .asistente-burbuja {
+      @apply grid size-full cursor-grab touch-none place-items-center
+             overflow-hidden rounded-full border border-surface-200 bg-white
+             transition-transform duration-150 hover:scale-105
+             focus-visible:outline-none active:cursor-grabbing;
+      /* Un halo verdoso muy suave, en vez de la sombra gris dura de antes. */
+      box-shadow: 0 6px 18px -6px rgb(5 59 53 / 0.28), 0 2px 6px -2px rgb(9 9 11 / 0.12);
+    }
+    .asistente-burbuja.arrastrando {
+      @apply scale-110 transition-none;
+    }
+    .asistente-burbuja img {
+      /* `object-contain` en vez de `cover`: así se ve el pez entero y no un
+         recorte de la cara. El `scale` lo agranda un poco dentro del círculo
+         para que no quede perdido en el centro. */
+      @apply size-full object-contain p-0.5;
+      transform: scale(1.12);
+      /* La imagen no debe robar el gesto de arrastre: los eventos de puntero
+         tienen que llegar al botón. */
+      -webkit-user-drag: none;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    /* Puntito de aviso, como el de Messenger: aparece cuando hay una respuesta
+       nueva y el panel está cerrado. */
+    .pira-notificacion {
+      @apply pointer-events-none absolute top-0 right-0 hidden size-4 rounded-full
+             border-2 border-white bg-danger-500;
+    }
+    .pira-notificacion.visible {
+      @apply block;
+      animation: latido 1.1s ease-in-out infinite;
+    }
+
+    /* Botón de basura: aparece al pasar el mouse (o siempre en pantallas sin
+       hover, donde no habría forma de descubrirlo).
+
+       Importante: mientras está invisible (`opacity-0`) NO debe recibir
+       clics, porque está apoyado sobre la esquina de la burbuja y se comería
+       los toques que abren el chat. Por eso arranca con `pointer-events-none`
+       y solo se habilita cuando se ve (hover o foco). */
+    .pira-eliminar {
+      @apply pointer-events-none absolute -top-1 -left-1 grid size-6
+             cursor-pointer place-items-center rounded-full border
+             border-surface-200 bg-white text-surface-500 opacity-0 shadow
+             transition hover:text-danger-600 focus-visible:opacity-100;
+    }
+    .pira-envoltorio:hover .pira-eliminar {
+      @apply pointer-events-auto opacity-100;
+    }
+    @media (hover: none) {
+      .pira-eliminar { @apply pointer-events-auto opacity-100; }
+    }
+    .pira-envoltorio.arrastrando .pira-eliminar { @apply opacity-0; }
+
+    .asistente-panel {
+      @apply fixed right-4 bottom-4 z-70 flex h-[min(36rem,calc(100vh-2rem))]
+             w-[min(30rem,calc(100vw-2rem))] flex-col overflow-hidden
+             rounded-modal border border-surface-200 bg-white shadow-float
+             sm:right-6 sm:bottom-6;
+      animation: aparecer 150ms ease-out;
+      transition: left 200ms ease-out, top 200ms ease-out;
+    }
+    .asistente-panel-cabecera {
+      @apply flex items-center gap-3 border-b border-surface-200 bg-primary-600
+             px-4 py-3 text-[#fff];
+    }
+    .asistente-historial {
+      @apply flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-surface-50 p-4;
+    }
+    .asistente-pie { @apply border-t border-surface-200 bg-white p-3; }
+
+    /* Archivos adjuntos de Pira Pires: la lista va arriba del pie, separada
+       por su propio borde, con una etiqueta por archivo y una × para quitarlo. */
+    .asistente-pie-archivos {
+      @apply flex flex-wrap gap-2 border-t border-surface-200 bg-surface-50 px-3 py-2;
+    }
+    .archivo-chip {
+      @apply flex max-w-full items-center gap-1.5 rounded-full border
+             border-surface-200 bg-white py-1 pr-1 pl-2.5 text-xs
+             text-surface-600;
+    }
+    .archivo-chip-nombre {
+      @apply max-w-[10rem] truncate;
+    }
+    .archivo-chip-miniatura {
+      @apply size-6 shrink-0 rounded object-cover;
+    }
+    .archivo-chip-quitar {
+      @apply grid size-5 shrink-0 cursor-pointer place-items-center rounded-full
+             text-surface-400 transition hover:bg-danger-50 hover:text-danger-600;
+    }
+
+    /* Burbujas del chat, al estilo de una conversación: la del usuario a la
+       derecha y en verde, la del asistente a la izquierda y en blanco. */
+    .burbuja { @apply max-w-[85%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed; }
+    .burbuja-usuario {
+      @apply ml-auto rounded-tr-none bg-primary-600 text-[#fff];
+    }
+    .burbuja-asistente {
+      @apply mr-auto rounded-tl-none border border-surface-200 bg-white text-surface-700;
+    }
+    .burbuja-error {
+      @apply mr-auto rounded-tl-none border border-danger-200 bg-danger-50 text-danger-700;
+    }
+    /* Cursor de escritura: va pegado al último carácter mientras el texto se
+       revela, y desaparece cuando la respuesta termina de aparecer. */
+    .cursor-escritura::after {
+      content: '';
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      background: currentColor;
+      animation: parpadear 1s step-end infinite;
+    }
+    /* Palabra todavía no revelada por la animación de escritura. */
+    .palabra-oculta { visibility: hidden; }
+
+    /* ---------------- Misceláneos ---------------- */
+    .spinner {
+      @apply inline-block size-4 animate-spin rounded-full border-2
+             border-current border-t-transparent;
+    }
+    .separator { @apply h-px w-full bg-surface-200; }
+    .codigo {
+      @apply rounded bg-surface-100 px-1.5 py-0.5 font-mono text-xs
+             text-surface-700;
+    }
+    .scroll-area { @apply overflow-y-auto; }
+    .kpi {
+      @apply rounded-card border border-surface-200 bg-white p-6 shadow-panel;
+    }
+    .skeleton {
+      @apply animate-pulse rounded bg-surface-200;
+    }
+
+    /* ---------------- Inicio de sesión ----------------
+       Cubre la aplicación hasta que se entre. Es `fixed inset-0` con z-80, por
+       encima de todo (avisos z-60, burbuja z-70), así no se ve ni se toca el
+       ERP detrás. La foto de Pira Pires ocupa el panel izquierdo en pantallas
+       anchas y desaparece en las angostas, donde manda el formulario. */
+    .acceso {
+      @apply fixed inset-0 z-80 grid overflow-y-auto bg-surface-50
+             lg:grid-cols-[1.1fr_1fr];
+    }
+    .acceso-muestra {
+      @apply relative hidden overflow-hidden bg-primary-900 lg:block;
+    }
+    .acceso-muestra img {
+      @apply size-full object-cover object-center;
+      /* Un velo verde sobre la foto para que el texto de encima se lea. */
+      opacity: 0.92;
+    }
+    .acceso-muestra-texto {
+      @apply absolute inset-x-0 bottom-0 bg-gradient-to-t
+             from-primary-900/95 to-transparent p-10 text-[#fff];
+    }
+    .acceso-panel {
+      @apply flex items-center justify-center p-6 sm:p-10;
+    }
+    .acceso-tarjeta {
+      @apply w-full max-w-md rounded-modal border border-surface-200 bg-white
+             p-8 shadow-float;
+      /* El formulario de empresa es largo: la tarjeta scrollea sola para que
+         el botón de entrar siempre quede a la vista. */
+      max-height: calc(100dvh - 3rem);
+      overflow-y: auto;
+    }
+    /* Al crear una empresa la tarjeta se ensancha para usar dos columnas. */
+    .acceso-tarjeta.ancha {
+      max-width: 42rem;
+    }
+    .acceso-modo {
+      @apply flex w-full items-start gap-3 rounded-field border
+             border-surface-200 bg-white p-4 text-left transition
+             hover:border-primary-300 hover:bg-primary-50
+             focus-visible:ring-2 focus-visible:ring-primary-400
+             focus-visible:outline-none;
+    }
+    .acceso-modo-icono {
+      @apply flex size-10 shrink-0 items-center justify-center rounded-full
+             bg-primary-100 text-primary-700;
+    }
+    .acceso-volver {
+      @apply text-xs font-medium text-surface-500 underline-offset-2
+             hover:text-surface-800 hover:underline;
+    }
+    /* En pantallas angostas, la foto se muestra como encabezado en vez de
+       desaparecer del todo: es el rostro de Pira Pires dando la bienvenida. */
+    .acceso-avatar {
+      @apply mx-auto size-24 overflow-hidden rounded-full border-4 border-surface-200
+             shadow-lg;
+    }
+    .acceso-avatar img { @apply size-full object-cover; }
+    .acceso-sugerencia {
+      @apply flex items-center gap-2 rounded-field border border-primary-200
+             bg-primary-50 px-3 py-2 text-xs text-primary-700;
+    }
+    .acceso-error {
+      @apply flex items-start gap-2 rounded-field border border-danger-200
+             bg-danger-50 px-3 py-2 text-xs text-danger-700;
+    }
+
+    /* ---------------- Utilidad propia ----------------
+       `oculto` reemplaza a `hidden` de Tailwind para que el estado de los
+       paneles quede explícito en el HTML y en el CSS, en un solo lugar. */
+    .oculto { display: none !important; }
+    .vista { animation: aparecer 140ms ease-out; }
+  }
+
+  /* =====================================================================
+     IMPRESIÓN DE LOS REPORTES
+     Al imprimir solo interested el reporte: sin menú, sin filtros.
+     ===================================================================== */
+  @media print {
+    .no-imprimir { display: none !important; }
+    body { background: #fff !important; }
+    .card, .kpi {
+      border: 1px solid #e3e7ea !important;
+      box-shadow: none !important;
+      break-inside: avoid;
+    }
+    thead { display: table-header-group; }
+    .table-shell { overflow: visible !important; }
+    @page { margin: 12mm; }
+  }
+</style>
+</head>
+
+<body class="min-h-screen bg-surface-50 text-surface-800 antialiased">
+
+<!-- =====================================================================
+     INICIO DE SESIÓN
+     Cubre toda la aplicación hasta que se entre. Primero se elige cómo usar
+     el sistema: como empresa (se crea la cuenta con los datos de la figura
+     jurídica) o en modo individual (usuario Franco, contraseña Franco).
+     La cuenta de empresa se guarda en este navegador y la contraseña queda
+     como huella, no en texto plano.
+     ===================================================================== -->
+<div id="acceso" class="acceso no-imprimir">
+  <!-- Foto de Pira Pires, solo en pantallas anchas -->
+  <div class="acceso-muestra">
+    <img src="img/pirapires.jpg" alt="">
+    <div class="acceso-muestra-texto">
+      <p class="text-xs font-semibold tracking-[0.05em] text-[#ffffffb3] uppercase">
+        Mini ERP Contable
+      </p>
+      <h2 class="mt-2 text-3xl font-semibold text-[#ffffff]">
+        Pira Pires te da la bienvenida
+      </h2>
+      <p class="mt-2 max-w-md text-sm text-[#ffffffcc]">
+        Contabilidad, IVA e impuestos de Paraguay, con un asistente que
+        responde solo con normativa vigente.
+      </p>
+    </div>
+  </div>
+
+  <!-- Formulario -->
+  <div class="acceso-panel">
+    <div id="acceso-tarjeta" class="acceso-tarjeta">
+      <div class="acceso-avatar lg:hidden">
+        <img src="img/pirapires-cuadrado.jpg" alt="Pira Pires">
+      </div>
+
+      <div class="mt-5 text-center lg:mt-0 lg:text-left">
+        <h1 class="text-xl font-semibold text-surface-900">Iniciar sesión</h1>
+        <p id="acceso-subtitulo" class="mt-1 text-sm text-surface-500">
+          Elegí cómo vas a usar el sistema.
+        </p>
+      </div>
+
+      <!-- Paso 1: empresa o uso individual -->
+      <div id="acceso-modos" class="mt-6 grid gap-3">
+        <button type="button" id="acceso-modo-empresa" class="acceso-modo">
+          <span class="acceso-modo-icono" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 width="20" height="20" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/>
+              <path d="M9 10h.01M15 10h.01M9 13h.01M15 13h.01"/>
+            </svg>
+          </span>
+          <span class="min-w-0">
+            <span class="block text-sm font-semibold text-surface-900">Empresa</span>
+            <span id="acceso-modo-empresa-detalle"
+                  class="mt-0.5 block text-xs text-surface-500">
+              S.A., S.R.L., E.A.S., unipersonal, cooperativa y más
+            </span>
+          </span>
+        </button>
+
+        <button type="button" id="acceso-modo-individual" class="acceso-modo">
+          <span class="acceso-modo-icono" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 width="20" height="20" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </span>
+          <span class="min-w-0">
+            <span class="block text-sm font-semibold text-surface-900">Uso individual</span>
+            <span class="mt-0.5 block text-xs text-surface-500">
+              Para practicar contabilidad con Franco
+            </span>
+          </span>
+        </button>
+      </div>
+
+      <!-- Paso 2a: uso individual -->
+      <form id="acceso-formulario-individual" class="mt-6 space-y-4 oculto" novalidate>
+        <div>
+          <label class="label" for="acceso-usuario">Usuario</label>
+          <input id="acceso-usuario" name="usuario" type="text" class="input"
+                 autocomplete="username" placeholder="Franco">
+        </div>
+        <div>
+          <label class="label" for="acceso-clave">Contraseña</label>
+          <input id="acceso-clave" name="clave" type="password" class="input"
+                 autocomplete="current-password" placeholder="Franco">
+        </div>
+
+        <div id="acceso-individual-error" class="acceso-error oculto" role="alert"></div>
+
+        <div class="acceso-sugerencia">
+          <span class="shrink-0" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 width="16" height="16" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 16v-4M12 8h.01"/>
+              <circle cx="12" cy="12" r="9"/>
+            </svg>
+          </span>
+          <span>
+            Es una prueba: usuario <strong>Franco</strong> y contraseña
+            <strong>Franco</strong>.
+          </span>
+        </div>
+
+        <button type="submit" class="btn btn-md btn-primary-fill w-full">
+          Entrar
+        </button>
+        <button type="button" id="acceso-individual-volver" class="acceso-volver">
+          Volver
+        </button>
+      </form>
+
+      <!-- Paso 2b: empresa con cuenta ya creada -->
+      <form id="acceso-formulario-empresa" class="mt-6 space-y-4 oculto" novalidate>
+        <div id="acceso-empresa-identidad"
+             class="rounded-field border border-surface-200 bg-surface-50 px-3 py-2"></div>
+
+        <div>
+          <label class="label" for="acceso-empresa-usuario">Usuario</label>
+          <input id="acceso-empresa-usuario" name="usuario" type="text" class="input"
+                 autocomplete="username" placeholder="Usuario de la empresa">
+        </div>
+        <div>
+          <label class="label" for="acceso-empresa-clave">Contraseña</label>
+          <input id="acceso-empresa-clave" name="clave" type="password" class="input"
+                 autocomplete="current-password">
+        </div>
+
+        <div id="acceso-empresa-error" class="acceso-error oculto" role="alert"></div>
+
+        <button type="submit" id="acceso-empresa-entrar"
+                class="btn btn-md btn-primary-fill w-full">
+          Entrar
+        </button>
+        <div class="flex items-center justify-between gap-3">
+          <button type="button" id="acceso-empresa-crear" class="acceso-volver">
+            Crear otra empresa
+          </button>
+          <button type="button" id="acceso-empresa-volver" class="acceso-volver">
+            Volver
+          </button>
+        </div>
+      </form>
+
+      <!-- Paso 2c: empresa nueva -->
+      <form id="acceso-formulario-registro" class="mt-6 space-y-4 oculto" novalidate>
+        <div id="acceso-registro-campos" class="grid gap-3 sm:grid-cols-2"></div>
+
+        <hr class="border-surface-200">
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="label" for="acceso-registro-usuario">
+              Usuario de acceso <span class="required-mark" aria-hidden="true">*</span>
+            </label>
+            <input id="acceso-registro-usuario" name="usuario" type="text" class="input"
+                   autocomplete="username" placeholder="Ej.: admin">
+          </div>
+          <div>
+            <label class="label" for="acceso-registro-clave">
+              Contraseña <span class="required-mark" aria-hidden="true">*</span>
+            </label>
+            <input id="acceso-registro-clave" name="clave" type="password" class="input"
+                   autocomplete="new-password" placeholder="Mínimo 4 caracteres">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label" for="acceso-registro-clave2">
+              Repetir la contraseña <span class="required-mark" aria-hidden="true">*</span>
+            </label>
+            <input id="acceso-registro-clave2" name="clave2" type="password" class="input"
+                   autocomplete="new-password">
+          </div>
+        </div>
+
+        <div id="acceso-registro-error" class="acceso-error oculto" role="alert"></div>
+
+        <p id="acceso-registro-aviso" class="text-xs text-surface-500">
+          La cuenta se guarda en este navegador; la contraseña queda como
+          huella y no se envía al servidor.
+        </p>
+
+        <button type="submit" id="acceso-registro-crear"
+                class="btn btn-md btn-primary-fill w-full">
+          Crear empresa y entrar
+        </button>
+        <button type="button" id="acceso-registro-volver" class="acceso-volver">
+          Volver
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="aplicacion" class="flex min-h-screen">
+
+  <!-- ===================================================================
+       SIDEBAR
+       El menú es un patrón de tabs (role="tablist") sobre los paneles de
+       contenido: por eso se puede recorrer con las flechas del teclado.
+       =================================================================== -->
+  <aside class="no-imprimir sticky top-0 hidden h-screen w-64 shrink-0 flex-col
+                border-r border-surface-200 bg-white lg:flex">
+    <div class="flex items-center gap-3 border-b border-surface-200 px-5 py-5">
+      <div class="grid size-10 place-items-center rounded-xl bg-primary-600
+                  text-base font-bold text-[#fff]">₲</div>
+      <div class="min-w-0">
+        <p class="truncate text-sm font-semibold text-surface-800">Mini ERP</p>
+        <p class="truncate text-xs text-surface-500">Contable</p>
+      </div>
+    </div>
+
+    <nav id="menu" class="scroll-area flex-1 space-y-1 p-3"
+         role="tablist" aria-orientation="vertical" aria-label="Módulos del ERP">
+      <p class="px-3 pt-2 pb-1.5 text-[11px] font-semibold tracking-wider
+                text-surface-400 uppercase">Flujo contable</p>
+      <button class="tab" role="tab" id="tab-cuentas" data-vista="cuentas" aria-controls="vista-cuentas">
+        <span class="tab-icon">1</span> Plan de cuentas
+      </button>
+      <button class="tab" role="tab" id="tab-diario" data-vista="diario" aria-controls="vista-diario">
+        <span class="tab-icon">2</span> Libro Diario
+      </button>
+      <button class="tab" role="tab" id="tab-mayor" data-vista="mayor" aria-controls="vista-mayor">
+        <span class="tab-icon">3</span> Libro Mayor
+      </button>
+      <button class="tab" role="tab" id="tab-balance" data-vista="balance" aria-controls="vista-balance">
+        <span class="tab-icon">4</span> Balance
+      </button>
+      <button class="tab" role="tab" id="tab-iva" data-vista="iva" aria-controls="vista-iva">
+        <span class="tab-icon">5</span> IVA
+      </button>
+
+      <p class="px-3 pt-4 pb-1.5 text-[11px] font-semibold tracking-wider
+                text-surface-400 uppercase">Sistema</p>
+      <button class="tab" role="tab" id="tab-panel" data-vista="panel" aria-controls="vista-panel">
+        <span class="tab-icon">★</span> Panel
+      </button>
+      <button class="tab" role="tab" id="tab-controles" data-vista="controles" aria-controls="vista-controles">
+        <span class="tab-icon">6</span> Controles y reglas
+      </button>
+      <button class="tab" role="tab" id="tab-asistente" data-vista="asistente" aria-controls="vista-asistente">
+        <span class="tab-icon">?</span> Asistente
+      </button>
+    </nav>
+
+    <div class="border-t border-surface-200 p-4">
+      <p class="text-xs font-medium text-surface-700">Etapas 1 a 3</p>
+      <p class="mt-1 text-xs leading-relaxed text-surface-500">
+        Plan de cuentas · Libro Diario · Libro Mayor · Balance
+      </p>
+    </div>
+  </aside>
+
+  <!-- ===================================================================
+       CONTENIDO
+       =================================================================== -->
+  <div class="flex min-w-0 flex-1 flex-col">
+
+    <!-- Barra superior -->
+    <header class="no-imprimir sticky top-0 z-30 border-b border-surface-200
+                   bg-white/90 backdrop-blur">
+      <div class="flex flex-wrap items-center gap-3 px-4 py-3 lg:px-6">
+        <div class="flex items-center gap-2 lg:hidden">
+          <div class="grid size-8 place-items-center rounded-lg bg-primary-600
+                      font-bold text-[#fff]">₲</div>
+          <span class="text-sm font-semibold">Mini ERP</span>
+        </div>
+
+        <div class="min-w-0 flex-1">
+          <h1 id="empresa-nombre" class="truncate text-base font-semibold text-surface-800">
+            Mini ERP Contable
+          </h1>
+          <p id="empresa-detalle" class="truncate text-xs text-surface-500">
+            Cargando información de la empresa…
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <label class="sr-only" for="filtro-desde">Desde</label>
+          <input id="filtro-desde" type="date" class="input input-sm w-36">
+          <label class="sr-only" for="filtro-hasta">Hasta</label>
+          <input id="filtro-hasta" type="date" class="input input-sm w-36">
+          <button id="btn-tema" type="button"
+                  class="btn btn-sm btn-secondary-outline btn-icon"
+                  aria-label="Cambiar a modo oscuro" title="Modo claro / oscuro">
+            <span id="btn-tema-icono" aria-hidden="true"></span>
+          </button>
+          <button id="btn-salir" type="button"
+                  class="btn btn-sm btn-secondary-outline"
+                  title="Cerrar la sesión">
+            <span class="hidden sm:inline">Salir</span>
+            <span class="sm:hidden" aria-hidden="true">&#8592;</span>
+          </button>
+          <button id="btn-refrescar" class="btn btn-sm btn-secondary-fill">
+            Actualizar
+          </button>
+        </div>
+      </div>
+
+      <!-- Menú móvil: el mismo tablist, en horizontal -->
+      <div id="menu-movil" role="tablist" aria-label="Módulos del ERP"
+           class="scroll-area flex gap-1.5 overflow-x-auto border-t border-surface-100
+                  px-3 py-2 lg:hidden">
+        <button class="tab-movil" role="tab" id="tabm-panel" data-vista="panel" aria-controls="vista-panel">Panel</button>
+        <button class="tab-movil" role="tab" id="tabm-cuentas" data-vista="cuentas" aria-controls="vista-cuentas">Plan de cuentas</button>
+        <button class="tab-movil" role="tab" id="tabm-diario" data-vista="diario" aria-controls="vista-diario">Libro Diario</button>
+        <button class="tab-movil" role="tab" id="tabm-mayor" data-vista="mayor" aria-controls="vista-mayor">Libro Mayor</button>
+        <button class="tab-movil" role="tab" id="tabm-balance" data-vista="balance" aria-controls="vista-balance">Balance</button>
+        <button class="tab-movil" role="tab" id="tabm-iva" data-vista="iva" aria-controls="vista-iva">IVA</button>
+        <button class="tab-movil" role="tab" id="tabm-controles" data-vista="controles" aria-controls="vista-controles">Controles</button>
+        <button class="tab-movil" role="tab" id="tabm-asistente" data-vista="asistente" aria-controls="vista-asistente">Asistente</button>
+      </div>
+    </header>
+
+    <main class="flex-1 p-4 lg:p-6">
+
+      <!-- ===============================================================
+           PANEL
+           =============================================================== -->
+      <section id="vista-panel" role="tabpanel" aria-labelledby="tab-panel" class="vista">
+        <div id="panel-indicadores" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
+
+        <div class="mt-4 grid gap-4 lg:grid-cols-3">
+          <div class="card lg:col-span-2">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Estado de los controles del ERP</h2>
+                <p class="card-subtitle">Sección 18 del enunciado</p>
+              </div>
+            </div>
+            <div id="panel-controles" class="card-body space-y-1"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Datos de la empresa</h2>
+            </div>
+            <form id="form-empresa" class="card-body space-y-3"></form>
+          </div>
+        </div>
+
+        <div id="panel-perfil-empresa" class="card mt-4 oculto">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Perfil de la empresa</h2>
+              <p class="card-subtitle">Datos cargados al crear la cuenta de acceso</p>
+            </div>
+          </div>
+          <div id="panel-perfil-empresa-contenido" class="card-body"></div>
+        </div>
+
+        <div class="card mt-4">
+          <div class="card-header flex-wrap gap-2">
+            <div>
+              <h2 class="card-title">Cargar tus propios datos</h2>
+              <p class="card-subtitle">Importación desde CSV · plan de cuentas y asientos</p>
+            </div>
+            <span class="ml-auto text-xs text-surface-500">Máximo 1,5 MB por archivo</span>
+          </div>
+          <div class="card-body">
+            <p class="text-sm text-surface-600">
+              Descargá una plantilla, completala con tus datos y subila. El sistema valida
+              todo antes de guardar: si hay un error, no se importa nada y te indica la fila.
+            </p>
+            <div class="mt-4 grid gap-3 md:grid-cols-2">
+              <div class="rounded-field border border-surface-200 bg-surface-50/60 p-4">
+                <p class="text-sm font-semibold text-surface-800">1. Plan de cuentas</p>
+                <p class="mt-1 text-xs text-surface-500">
+                  Código, nombre, clasificación, naturaleza, tipo y estado.
+                  Las cuentas que ya existen se omiten.
+                </p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <a class="btn btn-sm btn-secondary-outline"
+                     href="plantillas/cuentas.csv" download>
+                    Plantilla CSV
+                  </a>
+                  <button id="panel-importar-cuentas" type="button"
+                          class="btn btn-sm btn-primary-outline">
+                    Importar cuentas
+                  </button>
+                </div>
+              </div>
+              <div class="rounded-field border border-surface-200 bg-surface-50/60 p-4">
+                <p class="text-sm font-semibold text-surface-800">2. Libro Diario</p>
+                <p class="mt-1 text-xs text-surface-500">
+                  Asiento, fecha, concepto, cuenta, detalle, debe y haber.
+                  Se importan confirmados y cada asiento debe cuadrar.
+                </p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <a class="btn btn-sm btn-secondary-outline"
+                     href="plantillas/asientos.csv" download>
+                    Plantilla CSV
+                  </a>
+                  <button id="panel-importar-asientos" type="button"
+                          class="btn btn-sm btn-primary-outline">
+                    Importar asientos
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p class="mt-3 text-xs text-surface-500">
+              El orden importa: primero se cargan las cuentas y después los asientos.
+              Si tu CSV usa coma decimal, guardalo con punto y coma (;) como separador.
+            </p>
+          </div>
+          <input id="archivo-cuentas" type="file" accept=".csv,text/csv,.txt" class="oculto">
+          <input id="archivo-asientos" type="file" accept=".csv,text/csv,.txt" class="oculto">
+        </div>
+
+        <div class="card mt-4">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Operaciones de prueba</h2>
+              <p class="card-subtitle">Sección 19 · 15 operaciones mínimas</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <p class="text-sm text-surface-600">
+              Se puede cargar el plan de cuentas del enunciado (sección 13) junto con las
+              <strong>15 operaciones económicas</strong> de una empresa ficticia, para ver de
+              una vez cómo el Libro Diario se convierte en Libro Mayor y Balance.
+            </p>
+            <div class="card-footer mt-4">
+              <button id="btn-cargar-demo" class="btn btn-md btn-primary-fill">
+                Cargar datos de prueba
+              </button>
+              <button id="btn-reiniciar" class="btn btn-md btn-danger-outline">
+                Vaciar base de datos
+              </button>
+              <span class="text-xs text-surface-500">
+                Vaciar elimina asientos y cuentas. Descargá el balance antes.
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===============================================================
+           PLAN DE CUENTAS  (sección 13)
+           =============================================================== -->
+      <section id="vista-cuentas" role="tabpanel" aria-labelledby="tab-cuentas" class="vista oculto">
+        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+
+          <div class="card">
+            <div class="card-header flex-wrap gap-2">
+              <h2 class="card-title">Plan de cuentas</h2>
+              <div class="ml-auto flex flex-wrap items-center gap-2">
+                <a class="btn btn-sm btn-secondary-outline"
+                   href="plantillas/cuentas.csv" download>
+                  Plantilla
+                </a>
+                <button id="btn-importar-cuentas" type="button"
+                        class="btn btn-sm btn-primary-outline">
+                  Importar CSV
+                </button>
+                <label class="sr-only" for="cuenta-busqueda">Buscar cuenta</label>
+                <input id="cuenta-busqueda" type="search" placeholder="Buscar cuenta…"
+                       class="input input-sm w-40">
+                <label class="flex cursor-pointer items-center gap-1.5 text-xs text-surface-600">
+                  <input id="cuenta-inactivas" type="checkbox" class="checkbox" checked>
+                  Mostrar inactivas
+                </label>
+              </div>
+            </div>
+            <div class="table-shell">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th class="w-28">Código</th>
+                    <th>Nombre de la cuenta</th>
+                    <th class="w-48">Clasificación</th>
+                    <th class="w-32">Naturaleza</th>
+                    <th class="w-28">Estado</th>
+                    <th class="w-44 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="cuentas-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card h-fit">
+            <div class="card-header">
+              <h2 id="cuenta-form-titulo" class="card-title">Nueva cuenta</h2>
+            </div>
+            <form id="form-cuenta" class="card-body space-y-3"></form>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ===============================================================
+           LIBRO DIARIO  (sección 14)
+           =============================================================== -->
+      <section id="vista-diario" role="tabpanel" aria-labelledby="tab-diario" class="vista oculto">
+        <div class="card mb-4">
+          <div class="card-header flex-wrap gap-2">
+            <div>
+              <h2 id="diario-form-titulo" class="card-title">Nuevo asiento</h2>
+              <p class="card-subtitle">
+                Partida doble: cargá al menos dos líneas y el sistema exige que cuadre
+              </p>
+            </div>
+            <button id="btn-cancelar-asiento"
+                    class="btn btn-sm btn-secondary-outline ml-auto oculto">
+              Cancelar
+            </button>
+          </div>
+          <form id="form-asiento" class="card-body space-y-4"></form>
+        </div>
+
+        <div class="card">
+          <div class="card-header flex-wrap gap-2">
+            <h2 class="card-title">Asientos registrados</h2>
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+              <a class="btn btn-sm btn-secondary-outline"
+                 href="plantillas/asientos.csv" download>
+                Plantilla
+              </a>
+              <button id="btn-importar-asientos" type="button"
+                      class="btn btn-sm btn-primary-outline">
+                Importar CSV
+              </button>
+              <label class="sr-only" for="diario-estado">Filtrar por estado</label>
+              <select id="diario-estado" class="select input-sm w-40">
+                <option value="TODOS">Todos los estados</option>
+                <option value="CONFIRMADO">Confirmados</option>
+                <option value="BORRADOR">Borradores</option>
+                <option value="ANULADO">Anulados</option>
+              </select>
+              <label class="sr-only" for="diario-busqueda">Buscar concepto</label>
+              <input id="diario-busqueda" type="search" placeholder="Buscar concepto…"
+                     class="input input-sm w-44">
+              <button id="btn-nuevo-asiento" class="btn btn-sm btn-primary-fill">
+                + Nuevo asiento
+              </button>
+            </div>
+          </div>
+          <div class="table-shell">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="w-16">N.º</th>
+                  <th class="w-28">Fecha</th>
+                  <th>Concepto</th>
+                  <th class="w-16 text-center">Líneas</th>
+                  <th class="w-36 text-right">Total Debe</th>
+                  <th class="w-36 text-right">Total Haber</th>
+                  <th class="w-36 text-center">Cuadre (C1)</th>
+                  <th class="w-32 text-center">Estado</th>
+                  <th class="w-56 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="diario-tbody"></tbody>
+            </table>
+          </div>
+          <div id="diario-resumen" class="card-footer text-xs text-surface-600"></div>
+        </div>
+
+        <div id="diario-detalle" class="mt-4 oculto"></div>
+      </section>
+
+      <!-- ===============================================================
+           LIBRO MAYOR  (sección 15)
+           =============================================================== -->
+      <section id="vista-mayor" role="tabpanel" aria-labelledby="tab-mayor" class="vista oculto">
+        <div class="card mb-4">
+          <div class="card-header flex-wrap gap-2">
+            <div>
+              <h2 class="card-title">Libro Mayor por cuenta</h2>
+              <p class="card-subtitle">
+                Se genera con los asientos confirmados del Libro Diario (control 4)
+              </p>
+            </div>
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+              <label class="sr-only" for="mayor-cuenta">Cuenta</label>
+              <select id="mayor-cuenta" class="select input-sm w-72"></select>
+              <button id="btn-ver-mayor" class="btn btn-sm btn-primary-fill">
+                Ver movimiento
+              </button>
+              <button id="btn-mayor-todas" class="btn btn-sm btn-secondary-outline">
+                Todas las cuentas
+              </button>
+              <button data-accion="imprimir"
+                      class="btn btn-sm btn-ghost-outline">
+                Imprimir
+              </button>
+            </div>
+          </div>
+          <div id="mayor-cabecera" class="card-body pb-0"></div>
+        </div>
+
+        <div id="mayor-resultado"></div>
+      </section>
+
+      <!-- ===============================================================
+           BALANCE DE COMPROBACIÓN  (sección 16)
+           =============================================================== -->
+      <section id="vista-balance" role="tabpanel" aria-labelledby="tab-balance" class="vista oculto">
+        <div class="card mb-4">
+          <div class="card-header flex-wrap gap-2">
+            <h2 class="card-title">Balance de Comprobación</h2>
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+              <label class="flex cursor-pointer items-center gap-1.5 text-xs text-surface-600">
+                <input id="balance-vacias" type="checkbox" class="checkbox">
+                Incluir cuentas sin movimiento
+              </label>
+              <label class="flex cursor-pointer items-center gap-1.5 text-xs text-surface-600">
+                <input id="balance-agrupado" type="checkbox" class="checkbox" checked>
+                Subtotales por clasificación
+              </label>
+              <button id="btn-ver-balance" class="btn btn-sm btn-primary-fill">
+                Generar balance
+              </button>
+              <button data-accion="imprimir"
+                      class="btn btn-sm btn-ghost-outline">
+                Imprimir
+              </button>
+            </div>
+          </div>
+          <div id="balance-cabecera" class="card-body pb-0"></div>
+        </div>
+
+        <div id="balance-resultado"></div>
+      </section>
+
+      <!-- ===============================================================
+           IVA DE PARAGUAY  (Ley N.º 1259/97)
+           Tres bloques: calculadora del importe, generación del asiento de
+           venta o compra, y liquidación mensual del período.
+           =============================================================== -->
+      <section id="vista-iva" role="tabpanel" aria-labelledby="tab-iva" class="vista oculto">
+        <div class="card mb-4">
+          <div class="card-header flex-wrap gap-2">
+            <div>
+              <h2 class="card-title">IVA · Impuesto al Valor Agregado</h2>
+              <p class="card-subtitle">
+                Tasas vigentes de Paraguay (Ley N.º 1259/97): 10 % general, 5 % reducida
+                y operaciones exentas
+              </p>
+            </div>
+            <div id="iva-estado" class="ml-auto"></div>
+          </div>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <!-- Calculadora + generación del asiento -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">Operación con IVA</h3>
+                <p class="card-subtitle">
+                  Calculá el impuesto y contabilizá la venta o la compra
+                </p>
+              </div>
+            </div>
+            <div class="card-body space-y-3">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="field">
+                  <label class="label" for="iva-tipo">Tipo de operación</label>
+                  <select id="iva-tipo" class="select">
+                    <option value="venta">Venta</option>
+                    <option value="compra">Compra</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="label" for="iva-alicuota">Alícuota</label>
+                  <select id="iva-alicuota" class="select"></select>
+                </div>
+              </div>
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="field">
+                  <label class="label" for="iva-modo">¿Qué importe conocés?</label>
+                  <select id="iva-modo" class="select">
+                    <option value="base">La base imponible (sin IVA)</option>
+                    <option value="total">El importe total (con IVA)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="label" for="iva-importe">Importe</label>
+                  <input id="iva-importe" type="text" inputmode="decimal"
+                         class="input" placeholder="1.000.000">
+                </div>
+              </div>
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="field">
+                  <label class="label" for="iva-cuenta">Cuenta de cobro o pago</label>
+                  <select id="iva-cuenta" class="select"></select>
+                </div>
+                <div class="field" id="iva-campo-gasto">
+                  <label class="label" for="iva-cuenta-gasto">Cuenta de gasto o bien</label>
+                  <select id="iva-cuenta-gasto" class="select"></select>
+                </div>
+              </div>
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="field">
+                  <label class="label" for="iva-fecha">Fecha</label>
+                  <input id="iva-fecha" type="date" class="input">
+                </div>
+                <div class="field">
+                  <label class="label" for="iva-concepto">Concepto</label>
+                  <input id="iva-concepto" type="text" class="input"
+                         placeholder="Venta de mercaderías">
+                </div>
+              </div>
+
+              <div id="iva-desglose" class="rounded-lg border border-surface-200
+                                              bg-surface-50 p-4 text-sm"></div>
+
+              <button id="btn-iva-contabilizar" class="btn btn-md btn-primary-fill w-full">
+                Contabilizar el asiento
+              </button>
+            </div>
+          </div>
+
+          <!-- Liquidación del período -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">Liquidación del período</h3>
+                <p class="card-subtitle">
+                  Débito Fiscal contra Crédito Fiscal · Formulario 120 de la SET
+                </p>
+              </div>
+            </div>
+            <div class="card-body space-y-3">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="field">
+                  <label class="label" for="iva-desde">Desde</label>
+                  <input id="iva-desde" type="date" class="input">
+                </div>
+                <div class="field">
+                  <label class="label" for="iva-hasta">Hasta</label>
+                  <input id="iva-hasta" type="date" class="input">
+                </div>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <button id="btn-iva-resumen" class="btn btn-md btn-secondary-outline">
+                  Ver resumen del período
+                </button>
+                <button id="btn-iva-liquidar" class="btn btn-md btn-primary-fill">
+                  Contabilizar la liquidación
+                </button>
+              </div>
+
+              <div id="iva-liquidacion"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="iva-resultado"></div>
+      </section>
+
+      <!-- ===============================================================
+           CONTROLES Y REGLAS  (sección 18)
+           =============================================================== -->
+      <section id="vista-controles" role="tabpanel" aria-labelledby="tab-controles" class="vista oculto">
+        <div class="card mb-4">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Reglas mínimas que controla el ERP</h2>
+              <p class="card-subtitle">Sección 18 · Control 1 a Control 6</p>
+            </div>
+          </div>
+          <div class="table-shell">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="w-24">Control</th>
+                  <th class="w-56">Regla</th>
+                  <th>Requisito del enunciado</th>
+                  <th>Cómo lo implementa el sistema</th>
+                  <th class="w-72">Estado en los datos actuales</th>
+                </tr>
+              </thead>
+              <tbody id="controles-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Trazabilidad de los reportes (controles 4 y 5)</h2>
+          </div>
+          <div class="table-shell">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="w-56">Reporte</th>
+                  <th class="w-64">De dónde lee los datos</th>
+                  <th>Cómo se obtiene</th>
+                  <th class="w-40 text-center">Carga manual</th>
+                </tr>
+              </thead>
+              <tbody id="trazabilidad-tbody"></tbody>
+            </table>
+          </div>
+          <div class="card-body border-t border-surface-200 text-sm text-surface-600">
+            El ERP tiene cuatro tablas: <code class="codigo">empresa</code>,
+            <code class="codigo">cuenta</code>, <code class="codigo">asiento</code> y
+            <code class="codigo">partida</code>. No existe ninguna tabla para el Libro Mayor ni
+            para el Balance: por eso es imposible cargarlos a mano, siempre se calculan a partir
+            de los asientos confirmados del Libro Diario.
+          </div>
+        </div>
+      </section>
+
+      <!-- ===============================================================
+           ASISTENTE VIRTUAL (Groq con respaldo en Gemini)
+           =============================================================== -->
+      <section id="vista-asistente" role="tabpanel" aria-labelledby="tab-asistente"
+               class="vista oculto">
+        <div class="card">
+          <div class="card-header flex-wrap gap-2">
+            <div>
+              <h2 class="card-title">Pira Pires · Asistente contable</h2>
+              <p class="card-subtitle">
+                Orientación con la legislación vigente de Paraguay · Groq como motor
+                principal y Gemini como respaldo automático
+              </p>
+            </div>
+            <div id="asistente-estado" class="ml-auto"></div>
+          </div>
+
+          <div id="asistente-historial"
+               class="scroll-area flex max-h-[65vh] min-h-80 flex-col gap-3
+                      overflow-y-auto border-b border-surface-200 p-4 sm:p-6">
+            <div class="flex items-start gap-3">
+              <img src="img/pirapires-cuadrado.jpg" alt="" aria-hidden="true"
+                   class="mt-0.5 size-8 shrink-0 rounded-full object-cover">
+              <div class="min-w-0 rounded-lg rounded-tl-none border border-surface-200
+                          bg-surface-50 px-3.5 py-2.5 text-sm leading-relaxed text-surface-700">
+                Hola, soy Pira Pires. Preguntame sobre contabilidad, impuestos o el uso
+                del sistema. Respondo solo con normativa paraguaya vigente.
+              </div>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <form id="asistente-formulario" class="flex flex-wrap gap-2" novalidate>
+              <label class="sr-only" for="asistente-pregunta">Pregunta para el asistente</label>
+              <input id="asistente-pregunta" type="text" autocomplete="off"
+                     class="input min-w-0 flex-1"
+                     placeholder="Ej.: ¿Cómo registro una compra a crédito con IVA?">
+              <button id="asistente-enviar" type="submit" class="btn btn-md btn-primary-fill">
+                Preguntar
+              </button>
+            </form>
+            <p class="help-text">
+              El asistente puede equivocarse: verificá los montos y las fechas antes de
+              aplicarlos. No reemplaza la firma de un contador público matriculado.
+            </p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="no-imprimir border-t border-surface-200 px-6 py-3 text-center
+                   text-xs text-surface-400">
+      Mini ERP Contable · Etapas 1 a 3 · Plan de cuentas → Libro Diario → Libro Mayor → Balance
+    </footer>
+  </div>
+</div>
+
+<!-- Región de avisos. aria-live para que un lector de pantalla anuncie los
+     mensajes sin robar el foco (igual que el Toast de TailGrids). -->
+<div id="avisos" class="toast-region no-imprimir" role="region" aria-label="Avisos"
+     aria-live="polite"></div>
+
+<!-- =====================================================================
+     PIRA PIRES · ASISTENTE FLOTANTE
+     La burbuja vive fija en la esquina inferior derecha. Al tocarla se
+     abre el panel de chat, que es el mismo asistente de la pestaña pero
+     sin salir de la vista en la que se está trabajando.
+     ===================================================================== -->
+<div id="pira-envoltorio" class="pira-envoltorio no-imprimir">
+  <button id="pira-burbuja" type="button"
+          class="asistente-burbuja"
+          aria-label="Abrir el asistente Pira Pires. Se puede arrastrar para moverlo; doble clic lo devuelve a su lugar."
+          aria-controls="pira-panel" aria-expanded="false">
+    <img id="pira-burbuja-imagen" src="img/pescadobocacerrada-avatar.png"
+         alt="" aria-hidden="true">
+  </button>
+  <span id="pira-notificacion" class="pira-notificacion" aria-hidden="true"></span>
+  <button id="pira-eliminar" type="button" class="pira-eliminar"
+          title="Quitar la burbuja" aria-label="Quitar la burbuja de Pira Pires">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14"
+         fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"
+         stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+      <path d="M10 11v6M14 11v6"/>
+    </svg>
+  </button>
+</div>
+
+<section id="pira-panel" class="asistente-panel no-imprimir oculto"
+         role="dialog" aria-modal="false" aria-labelledby="pira-titulo">
+  <header class="asistente-panel-cabecera">
+    <img id="pira-cabecera-imagen" src="img/pescadobocaabierta-avatar.png"
+         alt="" aria-hidden="true"
+         class="size-9 shrink-0 rounded-full border-2 border-surface-200 object-cover">
+    <div class="min-w-0">
+      <p id="pira-titulo" class="truncate text-sm font-semibold">Pira Pires</p>
+      <p class="truncate text-xs text-[#ffffffcc]">Asistente contable · Paraguay</p>
+    </div>
+    <button id="pira-cerrar" type="button"
+            class="ml-auto grid size-8 shrink-0 place-items-center rounded-md
+                   text-[#ffffffe6] transition hover:bg-[#ffffff26]
+                   focus-visible:outline-none"
+            aria-label="Cerrar el asistente">
+      <span aria-hidden="true" class="text-lg leading-none">&times;</span>
+    </button>
+  </header>
+
+  <div id="pira-historial" class="asistente-historial" aria-live="polite">
+    <div class="flex items-start gap-2">
+      <img src="img/pescadobocaabierta-avatar.png" alt=""
+           aria-hidden="true" class="mt-0.5 size-7 shrink-0 rounded-full object-cover">
+      <div class="burbuja burbuja-asistente">
+        Hola, soy Pira Pires. Preguntame sobre contabilidad, impuestos o el uso
+        del sistema. Respondo solo con normativa paraguaya vigente.
+      </div>
+    </div>
+  </div>
+
+  <div id="pira-archivos" class="asistente-pie-archivos oculto"></div>
+  <form id="pira-formulario" class="asistente-pie flex flex-wrap items-center gap-2" novalidate>
+    <input id="pira-archivo" type="file" class="hidden" accept="image/*,.pdf,.csv,.txt,.json,.xls,.xlsx">
+    <button id="pira-adjuntar" type="button"
+            class="btn btn-md btn-secondary-outline btn-icon shrink-0"
+            title="Adjuntar imagen, PDF, CSV, TXT o JSON">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18"
+           fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49L12.95 2.06a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83L15.07 5"/>
+      </svg>
+    </button>
+    <label class="sr-only" for="pira-pregunta">Pregunta para Pira Pires</label>
+    <input id="pira-pregunta" type="text" autocomplete="off"
+           class="input min-w-0 flex-1" placeholder="Escribí tu pregunta…">
+    <button id="pira-enviar" type="submit"
+            class="btn btn-md btn-primary-fill shrink-0">Enviar</button>
+  </form>
+</section>
+
+<script src="ui.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

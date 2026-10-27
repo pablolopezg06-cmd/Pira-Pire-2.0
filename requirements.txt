@@ -1,0 +1,10 @@
+# Mini ERP Contable — dependencias de Python
+#
+# No hay ninguna. El proyecto usa solo la biblioteca estándar: sqlite3,
+# http.server, json, argparse y pathlib.
+#
+# El archivo existe porque el build de Render para Python ejecuta
+# `pip install -r requirements.txt`, y para dejar escrito el hecho de
+# que no hace falta instalar nada.
+#
+# Requisitos: Python 3.10 o superior.

@@ -1,0 +1,57 @@
+# =============================================================================
+# Mini ERP Contable — despliegue en Render
+#
+# Este archivo es un "Blueprint": Render lo lee del repositorio y crea el
+# servicio con esta configuración. Se usa desde el tablero con
+# New > Blueprint, apuntando a este repositorio.
+#
+# Lo único que hace falta es Python 3: el proyecto no tiene dependencias
+# externas, así que `pip install` no instala nada.
+# =============================================================================
+
+services:
+  - type: web
+    name: erp-contable
+    runtime: python
+
+    # El plan gratuito no pide tarjeta. Se apaga a los 15 minutos de
+    # inactividad y su disco es efímero: en cada arranque la base vuelve a
+    # quedar vacía. Los datos de prueba se cargan a mano desde el Panel.
+    plan: free
+
+    # Render no deja cambiar la región después de crear el servicio.
+    # Ohio (este de Estados Unidos) es el más cercano a Paraguay.
+    region: ohio
+
+    buildCommand: pip install -r requirements.txt
+    # Sin `--auto-sembrar`: el sistema arranca sin ningún dato cargado
+    # (sin empresa, sin cuentas y sin asientos). Así cada estudiante empieza
+    # de cero; si quiere la demostración, la carga desde el Panel, donde se
+    # pide confirmación porque reemplaza el plan de cuentas.
+    startCommand: python3 main.py
+
+    # Endpoint barato que devuelve 200 si el servidor responde.
+    healthCheckPath: /api/controles
+
+    # Desplegar en cada commit a la rama principal.
+    autoDeployTrigger: commit
+
+    envVars:
+      # Render exige escuchar en 0.0.0.0 (no en 127.0.0.1) para que su
+      # proxy pueda alcanzar el servicio. `main.py` también lo deduce solo
+      # cuando detecta la variable `RENDER`, pero aquí queda explícito.
+      - key: HOST
+        value: 0.0.0.0
+
+      # `PORT` no se declara a propósito: Render la inyecta sola (por
+      # defecto 10000) y `main.py` la lee del entorno. Fijarla a mano sería
+      # un paso que puede desincronizarse del puerto que espera el proxy.
+
+      # Claves del asistente virtual. Con `sync: false` Render las pide en
+      # el panel al crear el Blueprint; si se dejan vacías, la aplicación
+      # funciona igual y solo el chat con IA queda deshabilitado.
+      # El archivo local `claves.env` está ignorado por git: no sube al repo.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
