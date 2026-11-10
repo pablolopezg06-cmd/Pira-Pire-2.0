@@ -210,27 +210,20 @@ def _letra_columna(indice: int) -> str:
     return letras
 
 
-def escribir(
+def _hoja_xml(
     encabezados: list[str],
     filas: list[list],
-    hoja: str = "Hoja1",
     *,
     filas_negrita: set[int] | tuple = (),
     inmovilizar: int = 1,
-) -> bytes:
-    """
-    Arma un .xlsx con una sola hoja.
-
-    Las celdas ``int``, ``float`` y ``Decimal`` se escriben como números con
-    formato de importe; todo lo demás, como texto. La fila de encabezados va
-    en negrita, igual que las de ``filas_negrita`` (índices de ``filas``), y
-    las primeras ``inmovilizar`` filas quedan fijas al desplazarse.
-    """
+) -> str:
+    """XML de una hoja: encabezado en negrita, importes con formato numérico."""
     todas = [list(encabezados)] + [list(f) for f in filas]
+    ancho_tabla = max(len(f) for f in todas)
     anchos = [
         min(60, max(8, *(len(str(f[i])) if i < len(f) and f[i] is not None else 0
                          for f in todas)) + 2)
-        for i in range(len(encabezados))
+        for i in range(ancho_tabla)
     ]
 
     filas_xml: list[str] = []
@@ -255,19 +248,29 @@ def escribir(
         f'<col min="{i + 1}" max="{i + 1}" width="{ancho}" customWidth="1"/>'
         for i, ancho in enumerate(anchos)
     )
-    hoja_xml = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        f'<worksheet xmlns="{_NS["m"]}">'
-        '<sheetViews><sheetView workbookViewId="0">'
+    panel = (
         f'<pane ySplit="{inmovilizar}" topLeftCell="A{inmovilizar + 1}" '
         'activePane="bottomLeft" state="frozen"/>'
-        "</sheetView></sheetViews>"
+    ) if inmovilizar else ""
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<worksheet xmlns="{_NS["m"]}">'
+        f'<sheetViews><sheetView workbookViewId="0">{panel}</sheetView></sheetViews>'
         f"<cols>{columnas_xml}</cols>"
         f'<sheetData>{"".join(filas_xml)}</sheetData>'
         "</worksheet>"
     )
-    nombre_hoja = escape(re.sub(r"[\[\]:*?/\\]", "", hoja)[:31] or "Hoja1")
 
+
+def escribir_libro(hojas: list[dict]) -> bytes:
+    """
+    Arma un .xlsx con varias hojas. Cada hoja es un diccionario con
+    ``nombre``, ``encabezados``, ``filas`` y, opcionales, ``filas_negrita`` e
+    ``inmovilizar`` (ver ``_hoja_xml``).
+    """
+    cantidad = len(hojas)
+    nombres = [escape(re.sub(r"[\[\]:*?/\\]", "", h["nombre"])[:31] or f"Hoja{i + 1}")
+               for i, h in enumerate(hojas)]
     archivos = {
         "[Content_Types].xml": (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -275,8 +278,11 @@ def escribir(
             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
             '<Default Extension="xml" ContentType="application/xml"/>'
             '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-            '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-            '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+            + "".join(
+                f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+                for i in range(1, cantidad + 1)
+            )
+            + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
             "</Types>"
         ),
         "_rels/.rels": (
@@ -287,15 +293,21 @@ def escribir(
         ),
         "xl/workbook.xml": (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            f'<workbook xmlns="{_NS["m"]}" xmlns:r="{_NS_REL}">'
-            f'<sheets><sheet name="{nombre_hoja}" sheetId="1" r:id="rId1"/></sheets>'
-            "</workbook>"
+            f'<workbook xmlns="{_NS["m"]}" xmlns:r="{_NS_REL}"><sheets>'
+            + "".join(
+                f'<sheet name="{nombre}" sheetId="{i}" r:id="rId{i}"/>'
+                for i, nombre in enumerate(nombres, start=1)
+            )
+            + "</sheets></workbook>"
         ),
         "xl/_rels/workbook.xml.rels": (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-            '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+            + "".join(
+                f'<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>'
+                for i in range(1, cantidad + 1)
+            )
+            + f'<Relationship Id="rId{cantidad + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
             "</Relationships>"
         ),
         "xl/styles.xml": (
@@ -314,14 +326,41 @@ def escribir(
             '<xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/>'
             "</cellXfs></styleSheet>"
         ),
-        "xl/worksheets/sheet1.xml": hoja_xml,
     }
+    for i, hoja in enumerate(hojas, start=1):
+        archivos[f"xl/worksheets/sheet{i}.xml"] = _hoja_xml(
+            hoja["encabezados"], hoja["filas"],
+            filas_negrita=hoja.get("filas_negrita", ()),
+            inmovilizar=hoja.get("inmovilizar", 1),
+        )
 
     salida = io.BytesIO()
     with zipfile.ZipFile(salida, "w", zipfile.ZIP_DEFLATED) as zip_:
         for nombre, contenido in archivos.items():
             zip_.writestr(nombre, contenido)
     return salida.getvalue()
+
+
+def escribir(
+    encabezados: list[str],
+    filas: list[list],
+    hoja: str = "Hoja1",
+    *,
+    filas_negrita: set[int] | tuple = (),
+    inmovilizar: int = 1,
+) -> bytes:
+    """
+    Arma un .xlsx con una sola hoja.
+
+    Las celdas ``int``, ``float`` y ``Decimal`` se escriben como números con
+    formato de importe; todo lo demás, como texto. La fila de encabezados va
+    en negrita, igual que las de ``filas_negrita`` (índices de ``filas``), y
+    las primeras ``inmovilizar`` filas quedan fijas al desplazarse.
+    """
+    return escribir_libro([{
+        "nombre": hoja, "encabezados": encabezados, "filas": filas,
+        "filas_negrita": filas_negrita, "inmovilizar": inmovilizar,
+    }])
 
 
 def desde_csv(texto: str, hoja: str = "Hoja1") -> bytes:
@@ -358,6 +397,11 @@ def desde_csv(texto: str, hoja: str = "Hoja1") -> bytes:
 
 
 def libro_diario_de_clase(texto_csv: str, nombres: dict[str, str]) -> bytes:
+    """Libro Diario de clase en un .xlsx de una hoja (ver ``_hoja_libro_diario``)."""
+    return escribir_libro([_hoja_libro_diario(texto_csv, nombres)])
+
+
+def _hoja_libro_diario(texto_csv: str, nombres: dict[str, str]) -> dict:
     """
     Arma el Libro Diario con el formato de las planillas de clase:
     NRO · FECHA · CUENTAS CONTABLES · DEBE · HABER, una fila por cuenta, el
@@ -410,7 +454,121 @@ def libro_diario_de_clase(texto_csv: str, nombres: dict[str, str]) -> bytes:
     filas.insert(0, ["NRO", "FECHA", "CUENTAS CONTABLES", "DEBE", "HABER", "CÓDIGO"])
     negritas.add(len(filas))
     filas.append(["", "", "SUMAS IGUALES", desde_centavos(total_debe), desde_centavos(total_haber), ""])
-    return escribir(
-        ["LIBRO DIARIO", "", "", "", "", ""], filas, "LIBRO DIARIO",
-        filas_negrita=negritas, inmovilizar=2,
-    )
+    return {
+        "nombre": "LIBRO DIARIO", "encabezados": ["LIBRO DIARIO", "", "", "", "", ""],
+        "filas": filas, "filas_negrita": negritas, "inmovilizar": 2,
+    }
+
+
+def libros_contables(texto_csv: str, nombres: dict[str, str]) -> bytes:
+    """
+    El ejercitario completo en un .xlsx, con el formato de la plantilla de
+    la cátedra: LIBRO DIARIO, LIBRO MAYOR (cuentas T por folio, tres por
+    banda), BALANCE de comprobación de sumas y saldos, e IRE Y RATIOS.
+
+    La primera hoja es el Diario, así el archivo se puede volver a importar.
+    """
+    from . import estados
+    from .dinero import desde_centavos
+
+    analisis = estados.analizar(texto_csv, nombres)
+
+    def g(centavos: int):
+        return desde_centavos(centavos) if centavos else ""
+
+    def fecha_corta(texto: str) -> str:
+        try:
+            return datetime.strptime(texto, "%Y-%m-%d").strftime("%d/%m")
+        except ValueError:
+            return texto
+
+    # --- Libro Mayor: bandas de tres cuentas T, como en la plantilla ------
+    mayor: list[list] = [[""] * 15]
+    negritas_mayor: set[int] = set()
+    cuentas = analisis["mayor"]
+    for inicio in range(0, len(cuentas), 3):
+        banda = cuentas[inicio:inicio + 3]
+        alto = max(max(sum(1 for m in t["movimientos"] if m["debe"]),
+                       sum(1 for m in t["movimientos"] if m["haber"])) for t in banda)
+        bloque = [[""] * 15 for _ in range(alto + 6)]
+        for posicion, t in enumerate(banda):
+            x = posicion * 5
+            bloque[0][x] = f"Folio: {t['folio']:02d}"
+            bloque[1][x], bloque[1][x + 1] = "Cuenta:", t["nombre"].upper()
+            bloque[2][x:x + 4] = ["Asiento", "DEBE", "HABER", "Asiento"]
+            debe = [m for m in t["movimientos"] if m["debe"]]
+            haber = [m for m in t["movimientos"] if m["haber"]]
+            for fila, m in enumerate(debe):
+                bloque[3 + fila][x] = f"As. {m['asiento']} ({fecha_corta(m['fecha'])})"
+                bloque[3 + fila][x + 1] = g(m["debe"])
+            for fila, m in enumerate(haber):
+                bloque[3 + fila][x + 2] = g(m["haber"])
+                bloque[3 + fila][x + 3] = f"As. {m['asiento']} ({fecha_corta(m['fecha'])})"
+            bloque[alto + 3][x], bloque[alto + 3][x + 1], bloque[alto + 3][x + 2] = (
+                "Totales", g(t["debe"]) or 0, g(t["haber"]) or 0,
+            )
+            saldo = t["saldo"]
+            bloque[alto + 4][x] = "Saldo deudor" if saldo >= 0 else "Saldo acreedor"
+            bloque[alto + 4][x + (1 if saldo >= 0 else 2)] = g(abs(saldo)) or 0
+        base = len(mayor)
+        negritas_mayor |= {base, base + 1, base + 2, base + alto + 3, base + alto + 4}
+        mayor += bloque
+
+    # --- Balance de comprobación de sumas y saldos --------------------------
+    columnas = ("debe", "haber", "deudor", "acreedor", "activo", "pasivo_pn", "negativo", "positivo")
+    balance: list[list] = [
+        [""] * 10,
+        ["Nro. Folio", "Cuenta Contable", "SUMAS", "", "SALDOS", "", "PATRIMONIALES", "", "RESULTADOS", ""],
+        ["", "", "Debe", "Haber", "Deudor", "Acreedor", "Activo", "Pasivo/PNeto", "Negativo", "Positivo"],
+    ]
+    for f in analisis["balance"]:
+        balance.append([f["folio"], f["nombre"].upper(), *(g(f[c]) for c in columnas)])
+    sumas = analisis["sumas"]
+    balance.append(["", "SUMAS", *(desde_centavos(sumas[c]) for c in columnas)])
+    resultado = analisis["resultado"]
+    fila_resultado = ["", "Resultado del Ejercicio" + (" (ganancia)" if resultado > 0 else " (pérdida)" if resultado < 0 else "")] + [""] * 8
+    for c, valor in analisis["sumas_iguales"].items():
+        if valor != sumas[c]:
+            fila_resultado[2 + columnas.index(c)] = desde_centavos(valor - sumas[c])
+    balance.append(fila_resultado)
+    balance.append(["", "SUMAS IGUALES", *(desde_centavos(analisis["sumas_iguales"][c]) for c in columnas)])
+    negritas_balance = {1, 2, len(balance) - 3, len(balance) - 1}
+
+    # --- IRE y ratios --------------------------------------------------------
+    r = analisis["ratios"]
+    ratios: list[list] = [
+        ["", "", ""],
+        ["RESULTADO DEL EJERCICIO", "", ""],
+        ["Ingresos (cuentas 4)", desde_centavos(sumas["positivo"]), "Saldos acreedores de resultados"],
+        ["Costos y gastos (cuentas 5 y 6)", desde_centavos(sumas["negativo"]), "Saldos deudores de resultados"],
+        ["Resultado antes del IRE", desde_centavos(resultado), "Ingresos − costos y gastos"],
+        ["", "", ""],
+        ["IMPUESTO A LA RENTA EMPRESARIAL (IRE)", "", ""],
+        ["IRE (10 % de la renta neta)", desde_centavos(analisis["ire"]),
+         "Ley N.º 6380/2019; solo si hay ganancia" if resultado > 0 else "No aplica: no hay ganancia"],
+        ["Utilidad neta después del IRE", desde_centavos(analisis["utilidad_neta"]), "Resultado − IRE"],
+        ["", "", ""],
+        ["DATOS DEL BALANCE", "", ""],
+        ["Activo total", desde_centavos(analisis["activo_total"]), "Cuentas 1"],
+        ["Activo corriente", desde_centavos(analisis["activo_corriente"]), "Cuentas 1.1"],
+        ["Pasivo total", desde_centavos(analisis["pasivo_total"]), "Cuentas 2"],
+        ["Pasivo corriente", desde_centavos(analisis["pasivo_corriente"]), "Cuentas 2.1"],
+        ["Patrimonio neto (sin el resultado)", desde_centavos(analisis["patrimonio"]), "Cuentas 3"],
+        ["", "", ""],
+        ["RATIOS FINANCIEROS", "", ""],
+        ["ROI (%)", r["roi"] if r["roi"] is not None else "—", "Utilidad neta (después del IRE) / Activo total × 100"],
+        ["ROI antes del IRE (%)", r["roi_antes_ire"] if r["roi_antes_ire"] is not None else "—", "Resultado antes del IRE / Activo total × 100"],
+        ["Liquidez corriente", r["liquidez"] if r["liquidez"] is not None else "—", "Activo corriente / Pasivo corriente"],
+        ["Solvencia", r["solvencia"] if r["solvencia"] is not None else "—", "Activo total / Pasivo total"],
+    ]
+    negritas_ratios = {1, 6, 10, 17}
+
+    return escribir_libro([
+        _hoja_libro_diario(texto_csv, nombres),
+        {"nombre": "LIBRO MAYOR", "encabezados": ["LIBRO MAYOR"] + [""] * 14,
+         "filas": mayor, "filas_negrita": negritas_mayor, "inmovilizar": 0},
+        {"nombre": "BALANCE", "encabezados": ["BALANCE DE COMPROBACIÓN DE SUMAS Y SALDOS"] + [""] * 9,
+         "filas": balance, "filas_negrita": negritas_balance, "inmovilizar": 3},
+        {"nombre": "IRE Y RATIOS", "encabezados": ["IRE Y RATIOS FINANCIEROS", "", ""],
+         "filas": ratios, "filas_negrita": negritas_ratios, "inmovilizar": 0},
+    ])

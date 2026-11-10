@@ -2400,7 +2400,7 @@ async function enviarPregunta() {
       alEscribir: () => bajarAlFinal(respuesta.contenedor),
     });
     adjuntarCuentasCSV(respuesta, r.cuentas_csv);
-    adjuntarAsientosCSV(respuesta, r.asientos_csv, r.avisos);
+    adjuntarAsientosCSV(respuesta, r.asientos_csv, r.avisos, r.analisis);
   } catch (error) {
     esperando.remove();
     agregarFallo(error);
@@ -2976,7 +2976,7 @@ async function enviarPreguntaPira() {
     // La pestaña también muestra la conversación: se replica ahí si está
     // montada, para que las dos vistas no se contradigan.
     adjuntarCuentasCSV(respuesta, r.cuentas_csv);
-    adjuntarAsientosCSV(respuesta, r.asientos_csv, r.avisos);
+    adjuntarAsientosCSV(respuesta, r.asientos_csv, r.avisos, r.analisis);
     replicarEnPestana(texto || '(archivo adjunto)', r);
   } catch (error) {
     esperando.remove();
@@ -3240,7 +3240,33 @@ function adjuntarCuentasCSV(respuesta, csv) {
 }
 
 /** Tarjeta con los asientos propuestos, debajo de la burbuja de respuesta. */
-function adjuntarAsientosCSV(respuesta, csv, avisos = []) {
+/** Resultado, IRE y ratios calculados por el sistema a partir del Diario. */
+function resumenAnalisis(a) {
+  if (!a) return '';
+  const r = a.ratios || {};
+  const num = (v, sufijo = '') => (v == null ? '—'
+    : `${Number(v).toLocaleString('es-PY', { maximumFractionDigits: 2 })}${sufijo}`);
+  const fila = (etiqueta, valor, nota = '') => `
+    <tr><td>${esc(etiqueta)}</td>
+      <td class="whitespace-nowrap text-right tabular-nums font-semibold">${esc(valor)}</td>
+      <td class="text-surface-500">${esc(nota)}</td></tr>`;
+  return `
+    <div class="rounded-field border border-surface-200 p-2 text-xs">
+      <p class="font-semibold">Mayor, Balance, IRE y ratios (calculados por el sistema)</p>
+      <table class="table text-xs"><tbody>
+        ${fila('Resultado del ejercicio', fmt(a.resultado), a.resultado >= 0 ? 'ganancia' : 'pérdida')}
+        ${fila('IRE (10 %)', fmt(a.ire), a.resultado > 0 ? 'Ley 6380/2019' : 'no aplica')}
+        ${fila('Utilidad neta', fmt(a.utilidad_neta))}
+        ${fila('ROI', num(r.roi, ' %'), 'utilidad después del IRE / activo total')}
+        ${fila('ROI antes del IRE', num(r.roi_antes_ire, ' %'), 'resultado antes del IRE / activo total')}
+        ${fila('Liquidez corriente', num(r.liquidez), 'activo cte. / pasivo cte.')}
+        ${fila('Solvencia', num(r.solvencia), 'activo total / pasivo total')}
+        ${fila('Sumas iguales', fmt(a.sumas_iguales), `${a.cuentas} cuentas en el Mayor`)}
+      </tbody></table>
+    </div>`;
+}
+
+function adjuntarAsientosCSV(respuesta, csv, avisos = [], analisis = null) {
   if (!csv || !respuesta?.caja) return;
   const destino = respuesta.caja.querySelector('.min-w-0') || respuesta.caja;
   const asientos = new Set(filasCSVAsientos(csv).slice(1).map((f) => f[0])).size;
@@ -3255,12 +3281,11 @@ function adjuntarAsientosCSV(respuesta, csv, avisos = []) {
     </p>
     ${(avisos || []).length ? `
       <div class="rounded-field border border-warning-300 bg-warning-50 p-2 text-xs text-warning-800">
-        <p class="font-semibold">Ojo: la propuesta parece incompleta</p>
+        <p class="font-semibold">Revisá antes de importar</p>
         <ul class="list-disc pl-4">${avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>
-        <p class="mt-1">Pedile a Pira Pires que lo complete, o revisá si falta
-          alguna cuenta en el plan de cuentas.</p>
       </div>` : ''}
     ${tablaAsientosPropuestos(csv)}
+    ${resumenAnalisis(analisis)}
     <div class="flex flex-wrap gap-2">
       <button type="button" class="btn btn-sm btn-primary-fill" data-accion="importar">
         ${UI.icono('tilde', { tamano: 14 })} Revisar e importar al Libro Diario
@@ -3272,7 +3297,7 @@ function adjuntarAsientosCSV(respuesta, csv, avisos = []) {
         ${UI.icono('descargar', { tamano: 14 })} CSV
       </button>
       <button type="button" class="btn btn-sm btn-secondary-outline" data-accion="xlsx">
-        ${UI.icono('descargar', { tamano: 14 })} Libro Diario en Excel
+        ${UI.icono('descargar', { tamano: 14 })} Libros contables en Excel
       </button>
       <a class="btn btn-sm btn-secondary-outline" download
          href="/api/exportar/cuentas?formato=xlsx&completar=1"
@@ -3338,7 +3363,7 @@ function replicarEnPestana(texto, respuesta) {
     alEscribir: () => bajarAlFinal(contenedor),
   });
   adjuntarCuentasCSV(burbuja, respuesta.cuentas_csv);
-  adjuntarAsientosCSV(burbuja, respuesta.asientos_csv, respuesta.avisos);
+  adjuntarAsientosCSV(burbuja, respuesta.asientos_csv, respuesta.avisos, respuesta.analisis);
 }
 
 /** Agrega una burbuja al historial y baja hasta el final.

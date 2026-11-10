@@ -35,6 +35,7 @@ from . import iva
 from . import libro_diario
 from . import libro_mayor
 from . import plan_de_cuentas
+from . import estados
 from . import excel
 from . import exportacion
 from . import importacion
@@ -941,6 +942,21 @@ class Manejador(BaseHTTPRequestHandler):
                     f"plan de cuentas: {', '.join(faltan)}. Crealas o importá la "
                     "plantilla de cuentas antes de importar los asientos."
                 )
+        # Mayor, Balance, IRE y ratios de los asientos propuestos: los calcula
+        # el código (no la IA) para mostrarlos en la tarjeta del chat.
+        if resultado.get("asientos_csv"):
+            nombres = {
+                linea.split(";")[0]: linea.split(";")[1]
+                for linea in (resultado.get("cuentas_csv") or "").splitlines()[1:]
+                if linea.count(";") >= 1
+            }
+            nombres.update({c["codigo"]: c["nombre"] for c in cuentas})
+            try:
+                resultado["analisis"] = estados.resumen(
+                    estados.analizar(resultado["asientos_csv"], nombres)
+                )
+            except (ErrorValidacion, ErrorMonto):
+                resultado["analisis"] = None
         self._enviar_json(resultado)
 
     # ------------------------------------------------------------------
@@ -1109,7 +1125,7 @@ class Manejador(BaseHTTPRequestHandler):
                 c["codigo"]: c["nombre"]
                 for c in plan_de_cuentas.listar_cuentas(self.ruta_base)
             })
-            contenido = excel.libro_diario_de_clase(texto, nombres)
+            contenido = excel.libros_contables(texto, nombres)
         else:
             contenido = excel.desde_csv(texto, str(datos.get("hoja") or "Hoja1"))
         self._enviar_archivo(

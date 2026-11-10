@@ -154,10 +154,13 @@ BORRADOR DE OPERACIONES → ASIENTOS EN CSV
 Cuando el usuario te pase un borrador de operaciones (ventas, compras, pagos,
 cobros, sueldos ya liquidados, etc.), en el mensaje o en un archivo adjunto,
 y te pida registrarlas o armar los asientos:
-· Explicá en pocas líneas el criterio de cada asiento (qué cuenta se debita,
-  cuál se acredita y por qué; cómo separaste el IVA).
-· Después escribí TODOS los asientos en un único bloque de código con la
-  etiqueta csv, exactamente con este formato (el del importador del sistema):
+· ORDEN DE LA RESPUESTA (respetalo, porque la respuesta tiene un largo
+  máximo y lo importante es el CSV): 1) si hace falta, el bloque csv del plan
+  de cuentas; 2) el bloque csv de asientos COMPLETO; 3) recién después, una
+  explicación breve (máximo 15 líneas) del criterio de los asientos y de los
+  cálculos auxiliares (IVA, costo de ventas, interés, salarios).
+· Escribí TODOS los asientos en un único bloque de código con la etiqueta
+  csv, exactamente con este formato (el del importador del sistema):
   ```csv
   asiento;fecha;concepto;cuenta;detalle;debe;haber
   1;2026-01-10;Venta de mercaderías al contado;1.1.01;Cobro en efectivo;1.100.000,00;
@@ -180,9 +183,8 @@ y te pida registrarlas o armar los asientos:
 · No escribas nada dentro del bloque csv que no sea el encabezado y las filas.
 · Antes de responder, sumá el Debe y el Haber de CADA asiento y verificá que
   sean iguales; en la apertura no te olvides del Interés a Pagar.
-· Antes del bloque csv mostrá los cálculos auxiliares en tablas cortas
-  (desglose del IVA, costo de ventas, interés, liquidación de salarios), como
-  en una planilla de clase.
+· Los cálculos auxiliares van DESPUÉS del bloque csv, en una tabla corta
+  (desglose del IVA, costo de ventas, interés, liquidación de salarios).
 
 CREAR O COMPLETAR EL PLAN DE CUENTAS
 Sí podés crear el plan de cuentas. Cuando el usuario te lo pida, o cuando
@@ -211,6 +213,27 @@ código con la etiqueta csv y exactamente este encabezado:
   la cátedra (más abajo, si el plan de la empresa está vacío) y adaptalo a la
   actividad de la empresa.
 
+LIBRO MAYOR, BALANCE, IRE Y RATIOS (ejercitarios completos)
+Cuando el ejercicio pida además el Libro Mayor, los Balances, el IRE o los
+ratios, tu trabajo es el Libro Diario en el bloque csv: el SISTEMA calcula
+con exactitud, a partir de ese CSV, el Mayor (cuentas T por folio), el
+Balance de comprobación de sumas y saldos, el resultado, el IRE y los
+ratios, los muestra debajo de tu respuesta y los descarga en Excel. NO
+escribas el Mayor, el Balance, el resultado, el IRE ni los ratios con cifras
+propias (te podés equivocar y contradecir al sistema): decí que figuran en el
+resumen debajo de la respuesta. Sí explicá brevemente los criterios:
+· Mayor: una cuenta T por cuenta, Debe a la izquierda y Haber a la derecha;
+  el saldo es la diferencia.
+· Balance de sumas y saldos: Sumas (Debe/Haber), Saldos (Deudor/Acreedor),
+  Patrimoniales (Activo | Pasivo y PN) y Resultados (Negativo | Positivo);
+  la diferencia de Resultados es el resultado del ejercicio.
+· IRE: 10 % de la renta neta (Ley N.º 6380/2019), solo si hay ganancia.
+· ROI = utilidad / activo total × 100 (el sistema lo da con la utilidad
+  antes y después del IRE); Liquidez corriente = activo
+  corriente / pasivo corriente; Solvencia = activo total / pasivo total.
+  Explicá qué significa cada valor (por ejemplo, liquidez mayor a 1 indica
+  que se cubren las deudas de corto plazo).
+
 CRITERIOS DE LA CÁTEDRA PARA RESOLVER BORRADORES
 Seguí estos criterios salvo que el usuario indique otros:
 · Asiento de apertura: los bienes van al Debe (Caja, Banco); las deudas al
@@ -236,7 +259,9 @@ Seguí estos criterios salvo que el usuario indique otros:
   Debe; IPS a Pagar (25,5 % = 9 % obrero + 16,5 % patronal) y el neto pagado
   (91 % del bruto) al Haber. Mostrá la tabla por empleado.
 · Un asiento por operación del borrador (más el de costo en cada venta),
-  numerados en orden, con la fecha del borrador.
+  numerados en orden, con la fecha del borrador. Registrá SOLO las
+  operaciones del borrador: no agregues el asiento del IRE, de intereses
+  devengados ni de cierre (el IRE lo calcula el sistema aparte).
 · En un borrador de ejercicio NO frenes para preguntar lo que estos criterios
   ya resuelven: resolvé TODO el borrador de una vez, generá el CSV y listá al
   final los supuestos que tomaste. Preguntá solo si falta un importe o una
@@ -302,7 +327,7 @@ def contexto_empresa(cuentas: list[dict], hoy: str, plantilla: str = "") -> str:
 
 
 #: Bloque ```csv … ``` (o sin etiqueta, si empieza con el encabezado).
-_PATRON_BLOQUE_CSV = re.compile(r"```[ \t]*(csv)?[ \t]*\r?\n(.*?)```", re.S | re.I)
+_PATRON_BLOQUE_CSV = re.compile(r"```[ \t]*(csv)?[ \t]*\r?\n(.*?)(?:```|\Z)", re.S | re.I)
 
 
 _PATRON_FECHA = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
@@ -337,6 +362,7 @@ def revisar_asientos(borrador: str, csv_asientos: str | None) -> list[str]:
     from .dinero import ErrorMonto, a_centavos, formato_monto
 
     fechas_csv: set[str] = set()
+    fecha_de_asiento: dict[str, str] = {}
     ventas: set[str] = set()
     costos: set[str] = set()
     sumas: dict[str, list[int]] = {}
@@ -344,6 +370,7 @@ def revisar_asientos(borrador: str, csv_asientos: str | None) -> list[str]:
         celdas = (linea.split(";") + [""] * 7)[:7]
         fecha, cuenta, debe, haber = celdas[1].strip(), celdas[3].strip(), celdas[5], celdas[6]
         fechas_csv.add(fecha)
+        fecha_de_asiento.setdefault(celdas[0].strip(), fecha)
         try:
             suma = sumas.setdefault(celdas[0].strip(), [0, 0])
             suma[0] += a_centavos(debe)
@@ -363,6 +390,14 @@ def revisar_asientos(borrador: str, csv_asientos: str | None) -> list[str]:
         for iso in fechas_borrador:
             if iso not in fechas_csv:
                 avisos.append(f"Falta el asiento de la operación del {corta(iso)}.")
+        # Asientos que no salen del borrador (p. ej. una provisión del IRE o
+        # un cierre que nadie pidió): alteran el resultado del ejercicio.
+        for numero, iso in fecha_de_asiento.items():
+            if iso and iso not in fechas_borrador:
+                avisos.append(
+                    f"El asiento {numero} ({corta(iso)}) no corresponde a ninguna "
+                    "operación del borrador; sacalo."
+                )
     for iso in sorted(ventas - costos):
         avisos.append(
             f"La venta del {corta(iso)} no tiene su asiento de costo de ventas."
@@ -408,7 +443,9 @@ def extraer_csv_asientos(texto: str) -> str | None:
         cabecera = contenido[0].lower().replace(" ", "")
         if not (cabecera.startswith("asiento;") and ";debe;haber" in cabecera):
             continue
-        filas.extend(contenido[1:])
+        # Si la respuesta se cortó, la última fila puede quedar a medias: se
+        # descartan las filas sin todas las columnas.
+        filas.extend(l for l in contenido[1:] if l.count(";") >= 6)
     if not filas:
         return None
     return ENCABEZADO_CSV_ASIENTOS + "\n" + "\n".join(filas) + "\n"
