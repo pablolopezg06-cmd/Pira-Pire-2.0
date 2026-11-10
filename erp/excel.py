@@ -210,39 +210,169 @@ def _letra_columna(indice: int) -> str:
     return letras
 
 
+#: Fuentes, rellenos y bordes de las planillas, por nombre.
+_FUENTES = {
+    "normal": '<font><sz val="11"/><name val="Calibri"/></font>',
+    "negrita": '<font><b/><sz val="11"/><name val="Calibri"/></font>',
+    "cursiva": '<font><i/><sz val="11"/><name val="Calibri"/></font>',
+    "cursiva_negrita": '<font><b/><i/><sz val="11"/><name val="Calibri"/></font>',
+    "titulo": '<font><b/><sz val="16"/><name val="Calibri"/></font>',
+}
+_RELLENOS = {
+    None: '<fill><patternFill patternType="none"/></fill>',
+    "gray125": '<fill><patternFill patternType="gray125"/></fill>',
+    **{
+        nombre: f'<fill><patternFill patternType="solid"><fgColor rgb="{color}"/>'
+                '<bgColor indexed="64"/></patternFill></fill>'
+        for nombre, color in {
+            "azul": "FFBDD7EE", "naranja": "FFF8CBAD", "amarillo": "FFFFE699",
+            "celeste": "FFDDEBF7", "verde": "FFE2EFDA", "gris": "FFD9D9D9",
+            "crema": "FFFFF2CC",
+        }.items()
+    },
+}
+
+
+def _borde(izquierda="", derecha="", arriba="", abajo="") -> str:
+    def lado(etiqueta: str, estilo: str) -> str:
+        return f'<{etiqueta} style="{estilo}"><color indexed="64"/></{etiqueta}>' if estilo else f"<{etiqueta}/>"
+    return (f"<border>{lado('left', izquierda)}{lado('right', derecha)}"
+            f"{lado('top', arriba)}{lado('bottom', abajo)}<diagonal/></border>")
+
+
+_BORDES = {
+    None: _borde(),
+    "caja": _borde("thin", "thin", "thin", "thin"),
+    "caja_gruesa": _borde("medium", "medium", "medium", "medium"),
+    "abajo": _borde(abajo="thin"),
+    "arriba": _borde(arriba="thin"),
+    "izquierda": _borde(izquierda="thin"),
+    "arriba_izquierda": _borde(izquierda="thin", arriba="thin"),
+}
+
+#: Estilos de celda con nombre: (fuente, relleno, borde, alineación).
+#: En las filas, una celda ``(valor, "estilo")`` usa uno de estos.
+ESTILOS = {
+    "normal": ("normal", None, None, None),
+    "negrita": ("negrita", None, None, None),
+    "titulo": ("titulo", None, None, "center"),
+    "caja": ("normal", None, "caja", None),
+    "caja_centro": ("normal", None, "caja", "center"),
+    "caja_negrita": ("negrita", None, "caja", None),
+    "encabezado": ("negrita", "azul", "caja", "center"),
+    "seccion": ("negrita", "azul", "caja", None),
+    "concepto": ("cursiva", None, "caja", None),
+    "separador": ("normal", "gris", "caja", None),
+    "subtotal": ("negrita", "gris", "caja", None),
+    "total": ("negrita", "crema", "caja", None),
+    "etiqueta": ("cursiva_negrita", None, None, None),
+    "nombre_cuenta": ("negrita", None, "abajo", "center"),
+    "t_izquierda": ("normal", None, "izquierda", None),
+    "t_total": ("negrita", None, "arriba", None),
+    "t_total_izquierda": ("negrita", None, "arriba_izquierda", None),
+    "grupo_folio": ("negrita", "gris", "caja", "center"),
+    "grupo_sumas": ("negrita", "naranja", "caja", "center"),
+    "grupo_saldos": ("negrita", "amarillo", "caja", "center"),
+    "grupo_patrimoniales": ("negrita", "celeste", "caja", "center"),
+    "grupo_resultados": ("negrita", "verde", "caja", "center"),
+}
+
+
+class _Estilos:
+    """Registro de los estilos usados en el libro (el <cellXfs> de styles.xml)."""
+
+    def __init__(self) -> None:
+        self.lista: list[tuple] = [("normal", None, None, None, 0)]
+
+    def indice(self, nombre: str, formato: int) -> int:
+        """Índice del estilo; ``formato`` es 4 (importe) o 0 (general)."""
+        clave = (*ESTILOS[nombre], formato)
+        if clave not in self.lista:
+            self.lista.append(clave)
+        return self.lista.index(clave)
+
+    def xml(self) -> str:
+        fuentes, rellenos, bordes = list(_FUENTES), list(_RELLENOS), list(_BORDES)
+        xfs = []
+        for fuente, relleno, borde, alineacion, formato in self.lista:
+            atributos = (
+                f'numFmtId="{formato}" fontId="{fuentes.index(fuente)}" '
+                f'fillId="{rellenos.index(relleno)}" borderId="{bordes.index(borde)}" xfId="0" '
+                'applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"'
+            )
+            xfs.append(
+                f'<xf {atributos} applyAlignment="1"><alignment horizontal="{alineacion}" vertical="center"/></xf>'
+                if alineacion else f"<xf {atributos}/>"
+            )
+        return (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            f'<styleSheet xmlns="{_NS["m"]}">'
+            f'<fonts count="{len(fuentes)}">{"".join(_FUENTES.values())}</fonts>'
+            f'<fills count="{len(rellenos)}">{"".join(_RELLENOS.values())}</fills>'
+            f'<borders count="{len(bordes)}">{"".join(_BORDES.values())}</borders>'
+            '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+            f'<cellXfs count="{len(xfs)}">{"".join(xfs)}</cellXfs></styleSheet>'
+        )
+
+
 def _hoja_xml(
-    encabezados: list[str],
+    encabezados: list,
     filas: list[list],
+    estilos: _Estilos,
     *,
     filas_negrita: set[int] | tuple = (),
     inmovilizar: int = 1,
+    combinar: list[str] | tuple = (),
+    anchos: list[float] | None = None,
+    altos: dict[int, float] | None = None,
 ) -> str:
-    """XML de una hoja: encabezado en negrita, importes con formato numérico."""
+    """
+    XML de una hoja. Cada celda es un valor simple o ``(valor, "estilo")``
+    (ver ``ESTILOS``); una celda con estilo se escribe aunque esté vacía,
+    para que se vean sus bordes y su color. Los números llevan formato de
+    importe. ``combinar`` son rangos como ``"A1:F1"``; ``anchos``, el ancho
+    de cada columna; ``altos``, ``{número de fila: alto}``.
+    """
     todas = [list(encabezados)] + [list(f) for f in filas]
+
+    def valor_de(celda):
+        return celda[0] if isinstance(celda, tuple) else celda
+
     ancho_tabla = max(len(f) for f in todas)
-    anchos = [
-        min(60, max(8, *(len(str(f[i])) if i < len(f) and f[i] is not None else 0
-                         for f in todas)) + 2)
-        for i in range(ancho_tabla)
-    ]
+    if anchos is None:
+        anchos = [
+            min(60, max(8, *(len(str(valor_de(f[i]))) if i < len(f) and valor_de(f[i]) is not None else 0
+                             for f in todas)) + 2)
+            for i in range(ancho_tabla)
+        ]
 
     filas_xml: list[str] = []
     for numero, fila in enumerate(todas, start=1):
         celdas: list[str] = []
-        for columna, valor in enumerate(fila):
-            if valor is None or valor == "":
+        for columna, celda in enumerate(fila):
+            valor, estilo = celda if isinstance(celda, tuple) else (celda, None)
+            vacio = valor is None or valor == ""
+            if vacio and estilo is None:
                 continue
+            if estilo is None:
+                estilo = "negrita" if numero == 1 or (numero - 2) in filas_negrita else "normal"
+            es_numero = isinstance(valor, (int, float, Decimal)) and not isinstance(valor, bool)
             ref = f"{_letra_columna(columna)}{numero}"
-            negrita = numero == 1 or (numero - 2) in filas_negrita
-            if isinstance(valor, (int, float, Decimal)) and not isinstance(valor, bool):
-                celdas.append(f'<c r="{ref}" s="{3 if negrita else 2}"><v>{valor}</v></c>')
+            # Los enteros (folios, números de asiento) van sin decimales.
+            es_importe = es_numero and not isinstance(valor, int)
+            s = estilos.indice(estilo, 4 if es_importe else 0)
+            if vacio:
+                celdas.append(f'<c r="{ref}" s="{s}"/>')
+            elif es_numero:
+                celdas.append(f'<c r="{ref}" s="{s}"><v>{valor}</v></c>')
             else:
-                estilo = ' s="1"' if negrita else ""
                 celdas.append(
-                    f'<c r="{ref}" t="inlineStr"{estilo}>'
+                    f'<c r="{ref}" t="inlineStr" s="{s}">'
                     f'<is><t xml:space="preserve">{escape(str(valor))}</t></is></c>'
                 )
-        filas_xml.append(f'<row r="{numero}">{"".join(celdas)}</row>')
+        alto = (altos or {}).get(numero)
+        atributos = f' ht="{alto}" customHeight="1"' if alto else ""
+        filas_xml.append(f'<row r="{numero}"{atributos}>{"".join(celdas)}</row>')
 
     columnas_xml = "".join(
         f'<col min="{i + 1}" max="{i + 1}" width="{ancho}" customWidth="1"/>'
@@ -252,12 +382,18 @@ def _hoja_xml(
         f'<pane ySplit="{inmovilizar}" topLeftCell="A{inmovilizar + 1}" '
         'activePane="bottomLeft" state="frozen"/>'
     ) if inmovilizar else ""
+    combinadas = (
+        f'<mergeCells count="{len(combinar)}">'
+        + "".join(f'<mergeCell ref="{rango}"/>' for rango in combinar)
+        + "</mergeCells>"
+    ) if combinar else ""
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         f'<worksheet xmlns="{_NS["m"]}">'
-        f'<sheetViews><sheetView workbookViewId="0">{panel}</sheetView></sheetViews>'
+        f'<sheetViews><sheetView workbookViewId="0" showGridLines="0">{panel}</sheetView></sheetViews>'
         f"<cols>{columnas_xml}</cols>"
         f'<sheetData>{"".join(filas_xml)}</sheetData>'
+        f"{combinadas}"
         "</worksheet>"
     )
 
@@ -265,12 +401,24 @@ def _hoja_xml(
 def escribir_libro(hojas: list[dict]) -> bytes:
     """
     Arma un .xlsx con varias hojas. Cada hoja es un diccionario con
-    ``nombre``, ``encabezados``, ``filas`` y, opcionales, ``filas_negrita`` e
-    ``inmovilizar`` (ver ``_hoja_xml``).
+    ``nombre``, ``encabezados``, ``filas`` y, opcionales, ``filas_negrita``,
+    ``inmovilizar``, ``combinar``, ``anchos`` y ``altos`` (ver ``_hoja_xml``).
     """
     cantidad = len(hojas)
     nombres = [escape(re.sub(r"[\[\]:*?/\\]", "", h["nombre"])[:31] or f"Hoja{i + 1}")
                for i, h in enumerate(hojas)]
+    estilos = _Estilos()
+    hojas_xml = [
+        _hoja_xml(
+            hoja["encabezados"], hoja["filas"], estilos,
+            filas_negrita=hoja.get("filas_negrita", ()),
+            inmovilizar=hoja.get("inmovilizar", 1),
+            combinar=hoja.get("combinar", ()),
+            anchos=hoja.get("anchos"),
+            altos=hoja.get("altos"),
+        )
+        for hoja in hojas
+    ]
     archivos = {
         "[Content_Types].xml": (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -310,29 +458,10 @@ def escribir_libro(hojas: list[dict]) -> bytes:
             + f'<Relationship Id="rId{cantidad + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
             "</Relationships>"
         ),
-        "xl/styles.xml": (
-            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            f'<styleSheet xmlns="{_NS["m"]}">'
-            '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
-            '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
-            '<fills count="2"><fill><patternFill patternType="none"/></fill>'
-            '<fill><patternFill patternType="gray125"/></fill></fills>'
-            '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
-            '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-            '<cellXfs count="4">'
-            '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
-            '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
-            '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
-            '<xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/>'
-            "</cellXfs></styleSheet>"
-        ),
+        "xl/styles.xml": estilos.xml(),
     }
-    for i, hoja in enumerate(hojas, start=1):
-        archivos[f"xl/worksheets/sheet{i}.xml"] = _hoja_xml(
-            hoja["encabezados"], hoja["filas"],
-            filas_negrita=hoja.get("filas_negrita", ()),
-            inmovilizar=hoja.get("inmovilizar", 1),
-        )
+    for i, hoja_xml in enumerate(hojas_xml, start=1):
+        archivos[f"xl/worksheets/sheet{i}.xml"] = hoja_xml
 
     salida = io.BytesIO()
     with zipfile.ZipFile(salida, "w", zipfile.ZIP_DEFLATED) as zip_:
@@ -350,16 +479,22 @@ def escribir(
     inmovilizar: int = 1,
 ) -> bytes:
     """
-    Arma un .xlsx con una sola hoja.
-
-    Las celdas ``int``, ``float`` y ``Decimal`` se escriben como números con
-    formato de importe; todo lo demás, como texto. La fila de encabezados va
-    en negrita, igual que las de ``filas_negrita`` (índices de ``filas``), y
-    las primeras ``inmovilizar`` filas quedan fijas al desplazarse.
+    Arma un .xlsx con una sola hoja, en casillas: el encabezado con fondo y
+    en negrita, y cada dato con borde. Las celdas ``int``, ``float`` y
+    ``Decimal`` se escriben como números con formato de importe; todo lo
+    demás, como texto. Las filas de ``filas_negrita`` (índices de ``filas``)
+    van en negrita y las primeras ``inmovilizar`` quedan fijas.
     """
+    ancho = max([len(encabezados), *(len(f) for f in filas)])
     return escribir_libro([{
-        "nombre": hoja, "encabezados": encabezados, "filas": filas,
-        "filas_negrita": filas_negrita, "inmovilizar": inmovilizar,
+        "nombre": hoja,
+        "encabezados": [(e, "encabezado") for e in encabezados],
+        "filas": [
+            [(valor, "caja_negrita" if i in filas_negrita else "caja")
+             for valor in list(f) + [""] * (ancho - len(f))]
+            for i, f in enumerate(filas)
+        ],
+        "inmovilizar": inmovilizar,
     }])
 
 
@@ -403,11 +538,12 @@ def libro_diario_de_clase(texto_csv: str, nombres: dict[str, str]) -> bytes:
 
 def _hoja_libro_diario(texto_csv: str, nombres: dict[str, str]) -> dict:
     """
-    Arma el Libro Diario con el formato de las planillas de clase:
-    NRO · FECHA · CUENTAS CONTABLES · DEBE · HABER, una fila por cuenta, el
-    concepto debajo de cada asiento y «SUMAS IGUALES» al final. A la derecha
-    va el CÓDIGO de cada cuenta, para que el archivo se pueda volver a
-    importar sin depender de cómo se llama la cuenta.
+    Arma el Libro Diario con el formato de las planillas de clase, en
+    casillas: NRO · FECHA · CUENTAS CONTABLES · DEBE · HABER, una fila por
+    cuenta, el concepto en cursiva debajo de cada asiento, una fila gris entre
+    asientos y «SUMAS IGUALES» al final. A la derecha va el CÓDIGO de cada
+    cuenta, para que el archivo se pueda volver a importar sin depender de
+    cómo se llama la cuenta.
 
     ``texto_csv`` es el CSV del importador (el que propone Pira Pires) y
     ``nombres`` traduce cada código de cuenta a su nombre en el plan.
@@ -415,7 +551,7 @@ def _hoja_libro_diario(texto_csv: str, nombres: dict[str, str]) -> dict:
     from .dinero import a_centavos, desde_centavos
 
     lineas = [
-        f for f in csv.reader(io.StringIO((texto_csv or "").lstrip("\ufeff")), delimiter=";")
+        f for f in csv.reader(io.StringIO((texto_csv or "").lstrip("﻿")), delimiter=";")
         if any(c.strip() for c in f)
     ]
     if len(lineas) < 2:
@@ -424,8 +560,16 @@ def _hoja_libro_diario(texto_csv: str, nombres: dict[str, str]) -> dict:
     def importe(valor: str):
         return desde_centavos(a_centavos(valor)) if valor.strip() else ""
 
-    filas: list[list] = []
-    negritas: set[int] = set()
+    def caja(*valores) -> list:
+        return [(v, "caja") for v in valores]
+
+    def cierre(concepto: str) -> list[list]:
+        return [
+            [("", "caja"), ("", "caja"), (concepto, "concepto"), ("", "caja"), ("", "caja"), ("", "caja")],
+            [("", "separador")] * 6,
+        ]
+
+    filas: list[list] = [[(t, "encabezado") for t in ("NRO", "FECHA", "CUENTAS CONTABLES", "DEBE", "HABER", "CÓDIGO")]]
     total_debe = total_haber = 0
     anterior = None
     concepto = ""
@@ -433,7 +577,7 @@ def _hoja_libro_diario(texto_csv: str, nombres: dict[str, str]) -> dict:
         asiento, fecha, concepto_linea, cuenta, detalle, debe, haber = (celdas + [""] * 7)[:7]
         if asiento != anterior:
             if anterior is not None:
-                filas += [["", "", concepto, "", "", ""], ["", "", "", "", "", ""]]
+                filas += cierre(concepto)
             try:
                 fecha = datetime.strptime(fecha.strip(), "%Y-%m-%d").strftime("%d/%m/%Y")
             except ValueError:
@@ -442,29 +586,32 @@ def _hoja_libro_diario(texto_csv: str, nombres: dict[str, str]) -> dict:
         else:
             primera = False
         nombre = nombres.get(cuenta.strip()) or detalle or cuenta
-        filas.append([
-            asiento if primera else "", fecha if primera else "",
-            nombre.upper(), importe(debe), importe(haber), cuenta.strip(),
-        ])
+        numero = int(asiento) if asiento.strip().isdigit() else asiento
+        fila = caja(numero if primera else "", fecha if primera else "",
+                    nombre.upper(), importe(debe), importe(haber), cuenta.strip())
+        fila[0] = (fila[0][0], "caja_centro")
+        fila[1] = (fila[1][0], "caja_centro")
+        fila[5] = (fila[5][0], "caja_centro")
+        filas.append(fila)
         total_debe += a_centavos(debe or "0")
         total_haber += a_centavos(haber or "0")
-    filas += [["", "", concepto, "", "", ""], ["", "", "", "", "", ""]]
-
-    negritas.add(0)
-    filas.insert(0, ["NRO", "FECHA", "CUENTAS CONTABLES", "DEBE", "HABER", "CÓDIGO"])
-    negritas.add(len(filas))
-    filas.append(["", "", "SUMAS IGUALES", desde_centavos(total_debe), desde_centavos(total_haber), ""])
+    filas += cierre(concepto)[:1]
+    filas.append([("", "total"), ("", "total"), ("SUMAS IGUALES", "total"),
+                  (desde_centavos(total_debe), "total"), (desde_centavos(total_haber), "total"), ("", "total")])
     return {
-        "nombre": "LIBRO DIARIO", "encabezados": ["LIBRO DIARIO", "", "", "", "", ""],
-        "filas": filas, "filas_negrita": negritas, "inmovilizar": 2,
+        "nombre": "LIBRO DIARIO",
+        "encabezados": [("LIBRO DIARIO", "titulo")] + [("", "titulo")] * 5,
+        "filas": filas, "inmovilizar": 2,
+        "combinar": ["A1:F1"], "anchos": [7, 12, 44, 18, 18, 10], "altos": {1: 26, 2: 18},
     }
 
 
 def libros_contables(texto_csv: str, nombres: dict[str, str]) -> bytes:
     """
     El ejercitario completo en un .xlsx, con el formato de la plantilla de
-    la cátedra: LIBRO DIARIO, LIBRO MAYOR (cuentas T por folio, tres por
-    banda), BALANCE de comprobación de sumas y saldos, e IRE Y RATIOS.
+    la cátedra y todo en casillas: LIBRO DIARIO, LIBRO MAYOR (cuentas T por
+    folio, tres por banda), BALANCE de comprobación de sumas y saldos, e
+    IRE Y RATIOS.
 
     La primera hoja es el Diario, así el archivo se puede volver a importar.
     """
@@ -476,99 +623,138 @@ def libros_contables(texto_csv: str, nombres: dict[str, str]) -> bytes:
     def g(centavos: int):
         return desde_centavos(centavos) if centavos else ""
 
+    def g0(centavos: int):
+        """Como ``g`` pero muestra 0,00 en vez de dejar la celda vacía."""
+        return desde_centavos(centavos)
+
     def fecha_corta(texto: str) -> str:
         try:
             return datetime.strptime(texto, "%Y-%m-%d").strftime("%d/%m")
         except ValueError:
             return texto
 
+    def letra(columna: int) -> str:
+        return _letra_columna(columna)
+
     # --- Libro Mayor: bandas de tres cuentas T, como en la plantilla ------
+    # Cada cuenta ocupa 4 columnas (asiento | DEBE | HABER | asiento) y una
+    # de separación. La línea vertical de la T es el borde izquierdo del Haber.
     mayor: list[list] = [[""] * 15]
-    negritas_mayor: set[int] = set()
+    combinar_mayor = ["A1:N1"]
     cuentas = analisis["mayor"]
     for inicio in range(0, len(cuentas), 3):
         banda = cuentas[inicio:inicio + 3]
         alto = max(max(sum(1 for m in t["movimientos"] if m["debe"]),
                        sum(1 for m in t["movimientos"] if m["haber"])) for t in banda)
-        bloque = [[""] * 15 for _ in range(alto + 6)]
+        base = len(mayor) + 2  # número de fila en Excel de la primera fila del bloque
+        bloque: list[list] = [[""] * 15 for _ in range(alto + 6)]
         for posicion, t in enumerate(banda):
             x = posicion * 5
-            bloque[0][x] = f"Folio: {t['folio']:02d}"
-            bloque[1][x], bloque[1][x + 1] = "Cuenta:", t["nombre"].upper()
-            bloque[2][x:x + 4] = ["Asiento", "DEBE", "HABER", "Asiento"]
+            bloque[0][x] = (f"Folio: {t['folio']:02d}", "etiqueta")
+            bloque[1][x] = ("Cuenta:", "etiqueta")
+            bloque[1][x + 1:x + 4] = [(t["nombre"].upper(), "nombre_cuenta"), ("", "nombre_cuenta"), ("", "nombre_cuenta")]
+            combinar_mayor.append(f"{letra(x + 1)}{base + 1}:{letra(x + 3)}{base + 1}")
+            bloque[2][x:x + 4] = [("DEBE", "encabezado"), ("", "encabezado"), ("HABER", "encabezado"), ("", "encabezado")]
+            combinar_mayor += [f"{letra(x)}{base + 2}:{letra(x + 1)}{base + 2}",
+                               f"{letra(x + 2)}{base + 2}:{letra(x + 3)}{base + 2}"]
             debe = [m for m in t["movimientos"] if m["debe"]]
             haber = [m for m in t["movimientos"] if m["haber"]]
+            for fila in range(alto):
+                bloque[3 + fila][x + 2] = ("", "t_izquierda")
             for fila, m in enumerate(debe):
-                bloque[3 + fila][x] = f"As. {m['asiento']} ({fecha_corta(m['fecha'])})"
-                bloque[3 + fila][x + 1] = g(m["debe"])
+                bloque[3 + fila][x] = (f"As. {m['asiento']} ({fecha_corta(m['fecha'])})", "normal")
+                bloque[3 + fila][x + 1] = (g(m["debe"]), "normal")
             for fila, m in enumerate(haber):
-                bloque[3 + fila][x + 2] = g(m["haber"])
-                bloque[3 + fila][x + 3] = f"As. {m['asiento']} ({fecha_corta(m['fecha'])})"
-            bloque[alto + 3][x], bloque[alto + 3][x + 1], bloque[alto + 3][x + 2] = (
-                "Totales", g(t["debe"]) or 0, g(t["haber"]) or 0,
-            )
+                bloque[3 + fila][x + 2] = (g(m["haber"]), "t_izquierda")
+                bloque[3 + fila][x + 3] = (f"As. {m['asiento']} ({fecha_corta(m['fecha'])})", "normal")
+            bloque[alto + 3][x:x + 4] = [("Totales", "t_total"), (g0(t["debe"]), "t_total"),
+                                         (g0(t["haber"]), "t_total_izquierda"), ("", "t_total")]
             saldo = t["saldo"]
-            bloque[alto + 4][x] = "Saldo deudor" if saldo >= 0 else "Saldo acreedor"
-            bloque[alto + 4][x + (1 if saldo >= 0 else 2)] = g(abs(saldo)) or 0
-        base = len(mayor)
-        negritas_mayor |= {base, base + 1, base + 2, base + alto + 3, base + alto + 4}
+            fila_saldo = [("Saldo deudor" if saldo >= 0 else "Saldo acreedor", "total"),
+                          ("", "total"), ("", "total"), ("", "total")]
+            fila_saldo[1 if saldo >= 0 else 2] = (g0(abs(saldo)), "total")
+            bloque[alto + 4][x:x + 4] = fila_saldo
         mayor += bloque
 
     # --- Balance de comprobación de sumas y saldos --------------------------
     columnas = ("debe", "haber", "deudor", "acreedor", "activo", "pasivo_pn", "negativo", "positivo")
+    grupos = ["grupo_sumas"] * 2 + ["grupo_saldos"] * 2 + ["grupo_patrimoniales"] * 2 + ["grupo_resultados"] * 2
     balance: list[list] = [
         [""] * 10,
-        ["Nro. Folio", "Cuenta Contable", "SUMAS", "", "SALDOS", "", "PATRIMONIALES", "", "RESULTADOS", ""],
-        ["", "", "Debe", "Haber", "Deudor", "Acreedor", "Activo", "Pasivo/PNeto", "Negativo", "Positivo"],
+        [("Nro. Folio", "grupo_folio"), ("Cuenta Contable", "grupo_folio"),
+         ("SUMAS", "grupo_sumas"), ("", "grupo_sumas"), ("SALDOS", "grupo_saldos"), ("", "grupo_saldos"),
+         ("PATRIMONIALES", "grupo_patrimoniales"), ("", "grupo_patrimoniales"),
+         ("RESULTADOS", "grupo_resultados"), ("", "grupo_resultados")],
+        [("", "grupo_folio"), ("", "grupo_folio")] + [
+            (texto, grupo) for texto, grupo in zip(
+                ("Debe", "Haber", "Deudor", "Acreedor", "Activo", "Pasivo/PNeto", "Negativo", "Positivo"), grupos)
+        ],
     ]
     for f in analisis["balance"]:
-        balance.append([f["folio"], f["nombre"].upper(), *(g(f[c]) for c in columnas)])
+        balance.append([(f["folio"], "caja_centro"), (f["nombre"].upper(), "caja"),
+                        *((g(f[c]), "caja") for c in columnas)])
     sumas = analisis["sumas"]
-    balance.append(["", "SUMAS", *(desde_centavos(sumas[c]) for c in columnas)])
+    balance.append([("", "subtotal"), ("SUMAS", "subtotal"),
+                    *((desde_centavos(sumas[c]), "subtotal") for c in columnas)])
     resultado = analisis["resultado"]
-    fila_resultado = ["", "Resultado del Ejercicio" + (" (ganancia)" if resultado > 0 else " (pérdida)" if resultado < 0 else "")] + [""] * 8
+    etiqueta = "Resultado del Ejercicio" + (" (ganancia)" if resultado > 0 else " (pérdida)" if resultado < 0 else "")
+    fila_resultado = [("", "caja"), (etiqueta, "concepto")] + [("", "caja")] * 8
     for c, valor in analisis["sumas_iguales"].items():
         if valor != sumas[c]:
-            fila_resultado[2 + columnas.index(c)] = desde_centavos(valor - sumas[c])
+            fila_resultado[2 + columnas.index(c)] = (desde_centavos(valor - sumas[c]), "caja")
     balance.append(fila_resultado)
-    balance.append(["", "SUMAS IGUALES", *(desde_centavos(analisis["sumas_iguales"][c]) for c in columnas)])
-    negritas_balance = {1, 2, len(balance) - 3, len(balance) - 1}
+    balance.append([("", "total"), ("SUMAS IGUALES", "total"),
+                    *((desde_centavos(analisis["sumas_iguales"][c]), "total") for c in columnas)])
 
     # --- IRE y ratios --------------------------------------------------------
     r = analisis["ratios"]
+
+    def dato(etiqueta: str, valor, formula: str) -> list:
+        return [(etiqueta, "caja"), (valor if valor is not None else "—", "caja"), (formula, "concepto")]
+
+    def seccion(titulo: str) -> list:
+        return [(titulo, "seccion"), ("", "seccion"), ("", "seccion")]
+
     ratios: list[list] = [
-        ["", "", ""],
-        ["RESULTADO DEL EJERCICIO", "", ""],
-        ["Ingresos (cuentas 4)", desde_centavos(sumas["positivo"]), "Saldos acreedores de resultados"],
-        ["Costos y gastos (cuentas 5 y 6)", desde_centavos(sumas["negativo"]), "Saldos deudores de resultados"],
-        ["Resultado antes del IRE", desde_centavos(resultado), "Ingresos − costos y gastos"],
-        ["", "", ""],
-        ["IMPUESTO A LA RENTA EMPRESARIAL (IRE)", "", ""],
-        ["IRE (10 % de la renta neta)", desde_centavos(analisis["ire"]),
-         "Ley N.º 6380/2019; solo si hay ganancia" if resultado > 0 else "No aplica: no hay ganancia"],
-        ["Utilidad neta después del IRE", desde_centavos(analisis["utilidad_neta"]), "Resultado − IRE"],
-        ["", "", ""],
-        ["DATOS DEL BALANCE", "", ""],
-        ["Activo total", desde_centavos(analisis["activo_total"]), "Cuentas 1"],
-        ["Activo corriente", desde_centavos(analisis["activo_corriente"]), "Cuentas 1.1"],
-        ["Pasivo total", desde_centavos(analisis["pasivo_total"]), "Cuentas 2"],
-        ["Pasivo corriente", desde_centavos(analisis["pasivo_corriente"]), "Cuentas 2.1"],
-        ["Patrimonio neto (sin el resultado)", desde_centavos(analisis["patrimonio"]), "Cuentas 3"],
-        ["", "", ""],
-        ["RATIOS FINANCIEROS", "", ""],
-        ["ROI (%)", r["roi"] if r["roi"] is not None else "—", "Utilidad neta (después del IRE) / Activo total × 100"],
-        ["ROI antes del IRE (%)", r["roi_antes_ire"] if r["roi_antes_ire"] is not None else "—", "Resultado antes del IRE / Activo total × 100"],
-        ["Liquidez corriente", r["liquidez"] if r["liquidez"] is not None else "—", "Activo corriente / Pasivo corriente"],
-        ["Solvencia", r["solvencia"] if r["solvencia"] is not None else "—", "Activo total / Pasivo total"],
+        [""] * 3,
+        seccion("RESULTADO DEL EJERCICIO"),
+        dato("Ingresos (cuentas 4)", desde_centavos(sumas["positivo"]), "Saldos acreedores de resultados"),
+        dato("Costos y gastos (cuentas 5 y 6)", desde_centavos(sumas["negativo"]), "Saldos deudores de resultados"),
+        dato("Resultado antes del IRE", desde_centavos(resultado), "Ingresos − costos y gastos"),
+        [""] * 3,
+        seccion("IMPUESTO A LA RENTA EMPRESARIAL (IRE)"),
+        dato("IRE (10 % de la renta neta)", desde_centavos(analisis["ire"]),
+             "Ley N.º 6380/2019; solo si hay ganancia" if resultado > 0 else "No aplica: no hay ganancia"),
+        dato("Utilidad neta después del IRE", desde_centavos(analisis["utilidad_neta"]), "Resultado − IRE"),
+        [""] * 3,
+        seccion("DATOS DEL BALANCE"),
+        dato("Activo total", desde_centavos(analisis["activo_total"]), "Cuentas 1"),
+        dato("Activo corriente", desde_centavos(analisis["activo_corriente"]), "Cuentas 1.1"),
+        dato("Pasivo total", desde_centavos(analisis["pasivo_total"]), "Cuentas 2"),
+        dato("Pasivo corriente", desde_centavos(analisis["pasivo_corriente"]), "Cuentas 2.1"),
+        dato("Patrimonio neto (sin el resultado)", desde_centavos(analisis["patrimonio"]), "Cuentas 3"),
+        [""] * 3,
+        seccion("RATIOS FINANCIEROS"),
+        dato("ROI (%)", r["roi"], "Utilidad neta (después del IRE) / Activo total × 100"),
+        dato("ROI antes del IRE (%)", r["roi_antes_ire"], "Resultado antes del IRE / Activo total × 100"),
+        dato("Liquidez corriente", r["liquidez"], "Activo corriente / Pasivo corriente"),
+        dato("Solvencia", r["solvencia"], "Activo total / Pasivo total"),
     ]
-    negritas_ratios = {1, 6, 10, 17}
+    secciones = [i + 2 for i, fila in enumerate(ratios) if fila and isinstance(fila[0], tuple) and fila[0][1] == "seccion"]
 
     return escribir_libro([
         _hoja_libro_diario(texto_csv, nombres),
-        {"nombre": "LIBRO MAYOR", "encabezados": ["LIBRO MAYOR"] + [""] * 14,
-         "filas": mayor, "filas_negrita": negritas_mayor, "inmovilizar": 0},
-        {"nombre": "BALANCE", "encabezados": ["BALANCE DE COMPROBACIÓN DE SUMAS Y SALDOS"] + [""] * 9,
-         "filas": balance, "filas_negrita": negritas_balance, "inmovilizar": 3},
-        {"nombre": "IRE Y RATIOS", "encabezados": ["IRE Y RATIOS FINANCIEROS", "", ""],
-         "filas": ratios, "filas_negrita": negritas_ratios, "inmovilizar": 0},
+        {"nombre": "LIBRO MAYOR", "encabezados": [("LIBRO MAYOR", "titulo")] + [("", "titulo")] * 13,
+         "filas": mayor, "inmovilizar": 0, "combinar": combinar_mayor,
+         "anchos": [14, 16, 16, 14, 3] * 3, "altos": {1: 26}},
+        {"nombre": "BALANCE",
+         "encabezados": [("BALANCE DE COMPROBACIÓN DE SUMAS Y SALDOS", "titulo")] + [("", "titulo")] * 9,
+         "filas": balance, "inmovilizar": 4,
+         "combinar": ["A1:J1", "A3:A4", "B3:B4", "C3:D3", "E3:F3", "G3:H3", "I3:J3"],
+         "anchos": [11, 34] + [16] * 8, "altos": {1: 26}},
+        {"nombre": "IRE Y RATIOS",
+         "encabezados": [("IRE Y RATIOS FINANCIEROS", "titulo"), ("", "titulo"), ("", "titulo")],
+         "filas": ratios, "inmovilizar": 0,
+         "combinar": ["A1:C1"] + [f"A{n}:C{n}" for n in secciones],
+         "anchos": [38, 20, 55], "altos": {1: 26}},
     ])
