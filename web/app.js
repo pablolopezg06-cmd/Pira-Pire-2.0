@@ -3336,14 +3336,23 @@ function adjuntarAsientosCSV(respuesta, csv, avisos = [], analisis = null) {
   tarjeta.querySelector('[data-accion="csv"]').onclick = () =>
     descargarTexto(csv, `${nombre}.csv`);
   tarjeta.querySelector('[data-accion="xlsx"]').onclick = async () => {
+    const libro = `libros-contables-pira-pires-${new Date().toISOString().slice(0, 10)}`;
     try {
       const respuesta = await fetch('/api/excel/desde-csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv, nombre, formato: 'libro' }),
+        body: JSON.stringify({ csv, nombre: libro, formato: 'libro' }),
       });
       if (!respuesta.ok) throw new Error(`Error ${respuesta.status}`);
-      descargarBlob(await respuesta.blob(), `${nombre}.xlsx`);
+      descargarBlob(await respuesta.blob(), `${libro}.xlsx`);
+      // El Mayor y el Balance están en otras hojas: en Excel se ven en las
+      // pestañas de abajo, y es fácil no notarlas.
+      avisar(
+        `Se descargó ${libro}.xlsx con 4 hojas: Libro Diario, Libro Mayor, `
+          + 'Balance e IRE y ratios. En Excel, cambiá de hoja con las pestañas de abajo.',
+        'success',
+        'Libros contables descargados',
+      );
     } catch (error) {
       avisar(`No se pudo generar el Excel: ${error.message}`, 'danger');
     }
